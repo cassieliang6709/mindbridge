@@ -5,6 +5,8 @@ conversations. It explores how an AI companion can remember user-approved
 context, notice recurring patterns, ask a useful follow-up instead of simply
 agreeing, and turn a conversation into a gentle reflection and next step.
 
+[Live Demo](https://mindbridge-demo-psi.vercel.app)
+
 ## What the demo includes
 
 - A working conversation flow with suggested replies
