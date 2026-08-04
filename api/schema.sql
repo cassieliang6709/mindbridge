@@ -72,3 +72,26 @@ CREATE INDEX IF NOT EXISTS memory_vectors_open_idx
 CREATE INDEX IF NOT EXISTS memory_vectors_embedding_idx
     ON memory_vectors USING ivfflat (embedding vector_cosine_ops)
     WITH (lists = 100);
+
+-- --- Path A ingestion cursors -------------------------------------------
+-- One row per transcript file. bytes_read is a resume point: these logs are
+-- append-only, so re-running ingestion only reads what was added since. If a
+-- file shrinks (rotated or rewritten) the reader restarts it from zero.
+CREATE TABLE IF NOT EXISTS ingest_cursors (
+    source          TEXT        NOT NULL,
+    path            TEXT        NOT NULL,
+    bytes_read      BIGINT      NOT NULL DEFAULT 0,
+    turns_ingested  INTEGER     NOT NULL DEFAULT 0,
+    last_uuid       TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (source, path)
+);
+
+-- Turns are keyed by their source record so re-ingesting a file cannot create
+-- duplicates even if a cursor is lost or reset.
+ALTER TABLE session_turns
+    ADD COLUMN IF NOT EXISTS source_key TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS session_turns_source_key_idx
+    ON session_turns (source_key)
+    WHERE source_key IS NOT NULL;

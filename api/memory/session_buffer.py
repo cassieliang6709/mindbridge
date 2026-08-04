@@ -33,6 +33,54 @@ class SessionBufferStore:
         assert row is not None
         return Turn(**dict(row))
 
+    # NOTE for future readers: rows arriving here are one-turn-per-response.
+    # Claude Code writes one JSONL record per content block and repeats the
+    # response's usage on each, so the ingest reader merges them by message id
+    # before this point. Summing per record inflated tokens by 2.5x.
+    async def append_many(
+        self,
+        rows: list[tuple[str, str, str, str | None, int, object, str]],
+    ) -> int:
+        """Bulk insert for Path A ingestion.
+
+        Rows are (session_id, role, content, tool, token_count, created_at,
+        source_key). ON CONFLICT on source_key makes re-ingesting a file a
+        no-op, so a lost or reset cursor cannot produce duplicate turns.
+        Returns how many rows were actually new.
+        """
+        if not rows:
+            return 0
+        inserted = await self._pool.fetchval(
+            """
+            WITH input AS (
+                SELECT * FROM unnest(
+                    $1::text[], $2::text[], $3::text[], $4::text[],
+                    $5::int[], $6::timestamptz[], $7::text[]
+                ) AS t(session_id, role, content, tool, token_count,
+                       created_at, source_key)
+            ), ins AS (
+                INSERT INTO session_turns
+                    (session_id, role, content, tool, token_count,
+                     created_at, source_key)
+                SELECT session_id, role, content, tool, token_count,
+                       created_at, source_key
+                FROM input
+                ON CONFLICT (source_key) WHERE source_key IS NOT NULL
+                DO NOTHING
+                RETURNING 1
+            )
+            SELECT count(*) FROM ins
+            """,
+            [row[0] for row in rows],
+            [row[1] for row in rows],
+            [row[2] for row in rows],
+            [row[3] for row in rows],
+            [row[4] for row in rows],
+            [row[5] for row in rows],
+            [row[6] for row in rows],
+        )
+        return int(inserted or 0)
+
     async def read(self, session_id: str, window: int | None = None) -> SessionBuffer:
         """The live window, newest last, plus how many turns have aged out."""
         limit = window or self._window

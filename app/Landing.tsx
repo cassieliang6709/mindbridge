@@ -221,10 +221,10 @@ const copy = {
     pathsNote: "一条不用你动手，一条让模型自己来。两条写进同一个记忆层。",
     laneA: {
       tag: "路径 A",
-      status: "解析器待实现",
-      built: false,
+      status: "已可用",
+      built: true,
       name: "被动日志解析",
-      note: "不需要你做任何事。后台解析本地结构化日志，抽出今天真正发生了什么。",
+      note: "不需要你做任何事。增量解析本地结构化日志，按天算出真正发生了什么；写入前先遮蔽疑似密钥。",
       sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/archived_sessions/"],
     },
     laneB: {
@@ -385,10 +385,10 @@ const copy = {
       "One needs nothing from you. One lets the model do it. Both write to the same store.",
     laneA: {
       tag: "Path A",
-      status: "parser not built",
-      built: false,
+      status: "working today",
+      built: true,
       name: "Passive log parsing",
-      note: "Nothing for you to do. A background pass reads the structured logs already on disk and extracts what actually happened today.",
+      note: "Nothing for you to do. An incremental pass reads the structured logs already on disk and computes what happened, masking suspected secrets before storing.",
       sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/archived_sessions/"],
     },
     laneB: {

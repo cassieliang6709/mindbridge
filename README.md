@@ -50,16 +50,19 @@ extractor are not. Nothing in this repo pretends otherwise:
 | `api/` — FastAPI, three tiers, decay retrieval, dedup, query cache | done (M1) |
 | `mcp_server/` — `upsert_preference`, `temporal_query` over stdio | done (M3) |
 | `evals/eval_memory_engine.py` — decay, dedup and token benchmarks | done |
-| Path A `jsonl` parser — reads Claude Code / Codex CLI transcripts | not started |
+| `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `train/` — dialogue-pair generation, QLoRA fine-tune (M2) | not started |
 | Semantic cache with threshold matching (M5) | not started |
 
-Two gaps worth naming precisely. **The diary at `/demo` is not yet wired to the
-API** — it still runs on fixed sample data in the browser, and says so in a
-banner. **Nothing ingests transcripts yet**: the engine stores and recalls what
-it is given, but the Path A parser that would read
-`~/.claude/projects/**/*.jsonl` is not written, so today memory arrives only
-through Path B (an MCP client calling `upsert_preference`).
+One gap worth naming precisely: **the diary at `/demo` is not yet wired to the
+API.** It still runs on fixed sample data in the browser and says so in a
+banner, even though real ingested cards now exist in Postgres.
+
+A second limit is by design: Path A produces **rule-based** day cards — counts,
+tool tallies, time spans, git branches. It does not narrate a day in prose or
+extract durable preferences from it, because both need the M2 local extractor.
+Preferences therefore still arrive only through Path B, i.e. a model deciding to
+call `upsert_preference`.
 
 The default embedder is a **deterministic hashing fallback**: offline, no key,
 and lexical-only. It exists so the stack boots and the mechanical tests run
@@ -75,6 +78,40 @@ docker compose up -d api          # FastAPI on :8000, OpenAPI at /docs
 curl localhost:8000/healthz
 docker compose run --rm evals     # benchmark -> evals/results.json
 ```
+
+### Path A: ingest your own transcripts
+
+```bash
+docker compose run --rm ingest                      # dry run, writes nothing
+docker compose run --rm ingest --since 7d           # ingest the last week
+docker compose run --rm ingest --full               # re-read everything
+docker compose run --rm ingest --status             # what has been read so far
+```
+
+Transcripts are mounted **read-only**, and only the transcript directories —
+not all of `~/.claude` or `~/.codex`, which also hold credentials the container
+has no reason to see. Text is passed through `ingest/redaction.py` before it is
+stored, which masks well-known key shapes (provider keys, bearer tokens, JWTs,
+`SECRET=`-style assignments, DSN passwords). That is a safety net, not a
+guarantee: it cannot catch a secret that looks like ordinary prose.
+
+Ingestion is incremental and idempotent. Each file has a byte cursor, so a
+re-run reads only what was appended; every turn also carries a `source_key`, so
+even `--full` on an already-ingested file inserts nothing. Two details the
+Claude Code format forces:
+
+- **One response spans several records**, one per content block, and each
+  repeats the same final `message.usage`. Summing per record inflated the token
+  total by 2.5x on real data, so records sharing a `message.id` are merged into
+  one turn and usage is counted once.
+- **The newest group may still be streaming.** Unless a file has been quiet for
+  a minute, its trailing group is held back and the cursor stops before it, so
+  a half-written response is never stored.
+
+Tool arguments and tool results are **not** stored by default: they are large,
+they duplicate file contents already on disk, and they are the likeliest place
+for a credential to appear. Only the tool *name* is kept. `--include-tool-io`
+overrides this.
 
 Register the MCP server with Claude Desktop, Claude Code, Cursor or VS Code:
 
@@ -102,6 +139,11 @@ and `POST /memories` over HTTP cannot drift apart.
 | `POST /summaries` · `GET /summaries` | T2 | write and list period cards |
 | `POST /memories` | T3 | dedup-then-write a preference |
 | `POST /memories/query` | T3 | time-decayed top-K recall |
+
+Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files
+had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,
+with 8 suspected secrets masked. A second run read 2 files; `--full` re-read all
+3,065 turns and inserted 0.
 
 ## Metrics policy
 

@@ -91,5 +91,40 @@ services:
       redis:
         condition: service_healthy
 
+  # Path A ingestion. Transcripts are mounted READ-ONLY, and only the
+  # transcript subdirectories — not all of ~/.claude or ~/.codex, which also
+  # hold credentials this container has no reason to see.
+  #
+  #   docker compose run --rm ingest              # dry run, writes nothing
+  #   docker compose run --rm ingest --since 7d --no-summaries
+  #   docker compose run --rm ingest --full       # re-read everything
+  ingest:
+    build: .
+    profiles: ["tools"]
+    entrypoint:
+      - python
+      - -m
+      - ingest.runner
+      - --claude-root
+      - /transcripts/claude
+      - --codex-root
+      - /transcripts/codex
+    command: ["--dry-run"]
+    environment:
+      MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
+      MINDBRIDGE_REDIS_URL: redis://redis:6379/0
+      MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+    volumes:
+      - ./api:/app/api
+      - ./ingest:/app/ingest
+      - ${HOME}/.claude/projects:/transcripts/claude:ro
+      - ${HOME}/.codex/archived_sessions:/transcripts/codex:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   pgdata:
