@@ -1,0 +1,95 @@
+# Local MindBridge backend: Postgres+pgvector, Redis, and the FastAPI service.
+#
+#   docker compose up -d db redis     # just the stores
+#   docker compose up -d              # everything, API on :8000
+#   docker compose run --rm evals     # benchmark -> evals/results.json
+#
+# Host ports are overridable because 5432 is often already taken:
+#   MINDBRIDGE_DB_PORT=5544 docker compose up -d
+
+name: mindbridge
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${MINDBRIDGE_DB_USER:-mindbridge}
+      POSTGRES_PASSWORD: ${MINDBRIDGE_DB_PASSWORD:-mindbridge}
+      POSTGRES_DB: ${MINDBRIDGE_DB_NAME:-mindbridge}
+    ports:
+      - "${MINDBRIDGE_DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MINDBRIDGE_DB_USER:-mindbridge}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${MINDBRIDGE_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    command:
+      - uvicorn
+      - api.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+    environment:
+      # Inside the compose network the stores are reachable on their own names
+      # and default ports, regardless of how they are published to the host.
+      MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
+      MINDBRIDGE_REDIS_URL: redis://redis:6379/0
+      MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      MINDBRIDGE_EMBEDDING_MODEL: ${MINDBRIDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-}
+      MINDBRIDGE_GEMINI_API_KEY: ${MINDBRIDGE_GEMINI_API_KEY:-}
+      MINDBRIDGE_DECAY_RATE_PER_DAY: ${MINDBRIDGE_DECAY_RATE_PER_DAY:-0.01}
+      MINDBRIDGE_DEDUP_THRESHOLD: ${MINDBRIDGE_DEDUP_THRESHOLD:-0.92}
+    ports:
+      - "${MINDBRIDGE_API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # One-shot benchmark container. Writes evals/results.json into the mounted
+  # working tree so the landing page picks the numbers up.
+  evals:
+    build: .
+    profiles: ["tools"]
+    command: ["python", "-m", "evals.eval_memory_engine"]
+    environment:
+      MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
+      MINDBRIDGE_REDIS_URL: redis://redis:6379/0
+      MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-}
+    volumes:
+      # results.json is written back into the working tree, and the source is
+      # mounted over the baked copy so re-running a benchmark after an edit does
+      # not need an image rebuild.
+      - ./evals:/app/evals
+      - ./api:/app/api
+      - ./mcp_server:/app/mcp_server
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

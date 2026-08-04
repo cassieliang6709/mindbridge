@@ -1,0 +1,74 @@
+-- MindBridge three-tier memory schema.
+-- {embedding_dim} is substituted from MINDBRIDGE_EMBEDDING_DIM at startup, so
+-- the vector column width always matches the configured embedding provider.
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- --- T1: session buffer -------------------------------------------------
+-- Raw turns exactly as they arrived. Nothing is summarised or deleted here;
+-- the "window" is a read concern (ORDER BY created_at DESC LIMIT n), which
+-- keeps eviction auditable instead of destructive.
+CREATE TABLE IF NOT EXISTS session_turns (
+    id          BIGSERIAL PRIMARY KEY,
+    session_id  TEXT        NOT NULL,
+    role        TEXT        NOT NULL CHECK (role IN ('user', 'assistant', 'tool')),
+    content     TEXT        NOT NULL,
+    tool        TEXT,
+    token_count INTEGER     NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS session_turns_session_created_idx
+    ON session_turns (session_id, created_at DESC);
+
+-- --- T2: rolling summary ------------------------------------------------
+-- One structured card per period. Re-running a day's batch updates the card
+-- in place rather than appending a second one.
+CREATE TABLE IF NOT EXISTS rolling_summaries (
+    id                        BIGSERIAL PRIMARY KEY,
+    session_id                TEXT,
+    period                    TEXT        NOT NULL,
+    summary                   TEXT        NOT NULL,
+    developer_behavior_facts  JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    token_count               INTEGER     NOT NULL DEFAULT 0,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- A period is unique per session; the NULL-session (global) card is handled
+-- by a second partial index because NULL never equals NULL in a UNIQUE.
+CREATE UNIQUE INDEX IF NOT EXISTS rolling_summaries_session_period_key
+    ON rolling_summaries (session_id, period)
+    WHERE session_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS rolling_summaries_global_period_key
+    ON rolling_summaries (period)
+    WHERE session_id IS NULL;
+
+-- --- T3: long-term vector memory ---------------------------------------
+-- valid_at is the bitemporal half of the design: created_at says when we
+-- learned the fact, valid_at says when it stopped being true. Superseding a
+-- preference closes the old row instead of overwriting it, so the history of
+-- what the user used to prefer survives.
+CREATE TABLE IF NOT EXISTS memory_vectors (
+    id               BIGSERIAL PRIMARY KEY,
+    content          TEXT        NOT NULL,
+    category         TEXT        NOT NULL DEFAULT 'other',
+    embedding        VECTOR({embedding_dim}) NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    valid_at         TIMESTAMPTZ,
+    superseded_by    BIGINT      REFERENCES memory_vectors (id) ON DELETE SET NULL,
+    access_count     INTEGER     NOT NULL DEFAULT 0,
+    decay_factor     REAL        NOT NULL DEFAULT 1.0,
+    last_accessed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS memory_vectors_open_idx
+    ON memory_vectors (category, created_at DESC)
+    WHERE valid_at IS NULL;
+
+-- Cosine ANN index. Rebuild (or raise lists) once the table is large; below a
+-- few thousand rows Postgres will sequential-scan anyway, which is exact.
+CREATE INDEX IF NOT EXISTS memory_vectors_embedding_idx
+    ON memory_vectors USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);

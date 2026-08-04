@@ -1,11 +1,179 @@
 {
-  "_comment": "Written by the scripts in evals/. Every value here must come from a reproducible run; leave it null until the run exists. The landing page renders null as PENDING rather than inventing a number.",
-  "generatedAt": null,
+  "_comment": "Written by evals/eval_memory_engine.py. Every value must come from a reproducible run; null renders as an in-progress badge on the landing page rather than a number. Headline metrics stay null unless the run used a real semantic embedder.",
+  "generatedAt": "2026-08-04T08:36:08+00:00",
   "commit": null,
+  "environment": {
+    "embedder": "hashing-local",
+    "semantic_embedder": false,
+    "embedding_dim": 1536,
+    "tokenizer": "cl100k_base",
+    "decay_rate_per_day": 0.01,
+    "dedup_threshold": 0.92
+  },
   "metrics": {
+    "promptTokenReduction": null,
+    "dedupAccuracy": null,
+    "decayOrdering": "100%",
+    "supersedeExclusion": "100%",
     "extractionJsonAccuracy": null,
     "localExtractionCostDelta": null,
-    "promptTokenReduction": null,
     "cacheCostSaving": null
-  }
+  },
+  "measurements": [
+    {
+      "name": "token_compression",
+      "value": 17.3,
+      "unit": "percent",
+      "note": "Positive means the compact prompt is smaller. Compares resending 12 raw turns against one T2 card plus top-3 T3 recall.",
+      "detail": {
+        "raw_history_tokens": 287,
+        "summary_card_tokens": 101,
+        "mean_compact_tokens": 237.3,
+        "tokenizer": "cl100k_base",
+        "per_query": [
+          {
+            "query": "这个 Python 项目该用什么包管理器",
+            "recalled": 3,
+            "recall_tokens": 133,
+            "compact_tokens": 234
+          },
+          {
+            "query": "周六下午能不能约个评审会",
+            "recalled": 3,
+            "recall_tokens": 136,
+            "compact_tokens": 237
+          },
+          {
+            "query": "回答的风格有什么要求",
+            "recalled": 3,
+            "recall_tokens": 140,
+            "compact_tokens": 241
+          }
+        ]
+      }
+    },
+    {
+      "name": "dedup_accuracy",
+      "value": 100.0,
+      "unit": "percent",
+      "note": "A false positive silently merges two different preferences, which is the worse error: the losing fact is never stored at all.",
+      "detail": {
+        "pairs": 7,
+        "threshold": 0.92,
+        "true_positive": 3,
+        "false_positive": 0,
+        "true_negative": 4,
+        "false_negative": 0,
+        "precision": 100.0,
+        "recall": 100.0,
+        "mistakes": []
+      }
+    },
+    {
+      "name": "decay_ordering",
+      "value": 100.0,
+      "unit": "percent",
+      "note": "Embedder-independent: identical content at different ages, so only exp(-λ·Δt) separates the scores. Passes when the ordering is newest-first and every score matches the closed form to 1e-6.",
+      "detail": {
+        "decay_rate_per_day": 0.01,
+        "ages_days": [
+          0.0,
+          30.0,
+          180.0,
+          365.0
+        ],
+        "newest_first": true,
+        "formula_max_abs_error": 7e-10,
+        "formula_holds": true,
+        "rows": [
+          {
+            "id": 1,
+            "age_days": 0.0,
+            "cosine": 1.0,
+            "score": 1.0,
+            "expected": 1.0,
+            "abs_error": 0.0
+          },
+          {
+            "id": 2,
+            "age_days": 30.0,
+            "cosine": 1.0,
+            "score": 0.740818,
+            "expected": 0.740818,
+            "abs_error": 0.0
+          },
+          {
+            "id": 3,
+            "age_days": 180.0,
+            "cosine": 1.0,
+            "score": 0.165299,
+            "expected": 0.165299,
+            "abs_error": 0.0
+          },
+          {
+            "id": 4,
+            "age_days": 365.0,
+            "cosine": 1.0,
+            "score": 0.025991,
+            "expected": 0.025991,
+            "abs_error": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "supersede_exclusion",
+      "value": 100.0,
+      "unit": "percent",
+      "note": "Embedder-independent bitemporal check: valid_at closes a record without deleting it, so history stays queryable on request.",
+      "detail": {
+        "cases": 2,
+        "passed": 2,
+        "superseded_penalty": 0.25,
+        "detail": [
+          {
+            "query": "周末的时间怎么安排",
+            "closed_id": 1,
+            "hidden_by_default": true,
+            "returned_when_requested": true,
+            "closed_decay_multiplier": 0.25
+          },
+          {
+            "query": "依赖该怎么装",
+            "closed_id": 1,
+            "hidden_by_default": true,
+            "returned_when_requested": true,
+            "closed_decay_multiplier": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "name": "conflict_detection",
+      "value": 0.0,
+      "unit": "percent",
+      "note": "Embedder-dependent. A lexical embedder scores unrelated wordings of the same subject far apart, so this is expected to be low under the hashing provider and is never published from such a run.",
+      "detail": {
+        "cases": 2,
+        "detected": 0,
+        "dedup_threshold": 0.92,
+        "detail": [
+          {
+            "old": "周末可以加班",
+            "new": "周末不排会议",
+            "action": "inserted",
+            "similarity": 0.3333,
+            "auto_superseded": false
+          },
+          {
+            "old": "用 pip 安装依赖",
+            "new": "Python 项目优先用 uv",
+            "action": "inserted",
+            "similarity": 0.1543,
+            "auto_superseded": false
+          }
+        ]
+      }
+    }
+  ]
 }

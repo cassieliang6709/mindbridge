@@ -552,6 +552,27 @@ h3 {
   font-style: normal;
 }
 
+/* Per-path build state. Amber dashed = not implemented, matching the treatment
+   the metrics table uses, so "planned" never reads as "shipped". */
+.lane-status {
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px dashed #d69e2e;
+  border-radius: 999px;
+  color: #ffd79a;
+  background: rgba(214, 158, 46, 0.14);
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.lane-status.built {
+  border: 1px solid rgba(143, 219, 168, 0.5);
+  color: #8fdba8;
+  background: rgba(143, 219, 168, 0.12);
+}
+
 .lane > p {
   margin: 0;
   color: #c3d3ea;

@@ -42,19 +42,78 @@ const benchRows: {
   enHow: ReactNode;
 }[] = [
   {
+    key: "decayOrdering",
+    zh: "时间衰减打分正确性",
+    en: "Time-decay scoring correctness",
+    zhHow: (
+      <>
+        同一条内容存成不同年龄，检验排序是否新的在前、且每个分数与闭式
+        cosine · exp(-λ·Δt) 相差在 1e-6 内。与 embedder 无关。脚本：
+        <code>evals/eval_memory_engine.py</code>
+      </>
+    ),
+    enHow: (
+      <>
+        Identical content stored at several ages: checks newest-first ordering
+        and that every score matches the closed form cosine · exp(-λ·Δt) to
+        within 1e-6. Embedder-independent. Script:{" "}
+        <code>evals/eval_memory_engine.py</code>
+      </>
+    ),
+  },
+  {
+    key: "supersedeExclusion",
+    zh: "失效记忆隔离正确性",
+    en: "Superseded-record isolation",
+    zhHow: (
+      <>
+        被取代的记录必须从默认检索里消失，同时在显式要求时仍能取回 ——
+        valid_at 关闭而不删除。与 embedder 无关。脚本：
+        <code>evals/eval_memory_engine.py</code>
+      </>
+    ),
+    enHow: (
+      <>
+        A superseded record must vanish from default retrieval yet still return
+        when explicitly requested — valid_at closes it without deleting it.
+        Embedder-independent. Script: <code>evals/eval_memory_engine.py</code>
+      </>
+    ),
+  },
+  {
+    key: "dedupAccuracy",
+    zh: "写入去重准确率",
+    en: "Write-time dedup accuracy",
+    zhHow: (
+      <>
+        在标注好的「同一事实 / 不同事实」偏好对上跑混淆矩阵。取决于 embedder
+        质量，只在真实语义模型下发布。脚本：
+        <code>evals/eval_memory_engine.py</code>
+      </>
+    ),
+    enHow: (
+      <>
+        Confusion matrix over labelled same-fact / different-fact preference
+        pairs. Depends on embedding quality, so it is only published from a real
+        semantic provider. Script: <code>evals/eval_memory_engine.py</code>
+      </>
+    ),
+  },
+  {
     key: "extractionJsonAccuracy",
     zh: "偏好抽取 JSON 合规率",
     en: "Preference-extraction JSON validity",
     zhHow: (
       <>
-        微调后的 Qwen2.5-7B 在 holdout 集上，输出能通过 schema 校验的比例。脚本：
-        <code>evals/extraction.py</code>
+        微调后的 Qwen2.5-7B 在 holdout 集上，输出能通过 schema 校验的比例。
+        脚本待建（M2 抽取层还没开始）。
       </>
     ),
     enHow: (
       <>
         Share of outputs from the fine-tuned Qwen2.5-7B that pass schema
-        validation on a holdout set. Script: <code>evals/extraction.py</code>
+        validation on a holdout set. Script not written yet — M2 extraction has
+        not started.
       </>
     ),
   },
@@ -64,14 +123,13 @@ const benchRows: {
     en: "Extraction API cost delta",
     zhHow: (
       <>
-        同一批对话，走托管 API 与走本地 vLLM 的成本对比。脚本：
-        <code>evals/cost_extraction.py</code>
+        同一批对话，走托管 API 与走本地 vLLM 的成本对比。脚本待建（M2）。
       </>
     ),
     enHow: (
       <>
         The same batch of dialogues priced through a hosted API versus the local
-        vLLM instance. Script: <code>evals/cost_extraction.py</code>
+        vLLM instance. Script not written yet — M2.
       </>
     ),
   },
@@ -81,14 +139,16 @@ const benchRows: {
     en: "Per-turn prompt token reduction",
     zhHow: (
       <>
-        长对话下，喂结构化摘要与喂原始历史的 token 数对比。脚本：
-        <code>evals/tokens.py</code>
+        长对话下，喂结构化摘要 + 实际召回，与重发原始历史的 token 数对比。
+        取决于 embedder，只在真实语义模型下发布。脚本：
+        <code>evals/eval_memory_engine.py</code>
       </>
     ),
     enHow: (
       <>
-        Structured summaries versus raw history, measured over long
-        conversations. Script: <code>evals/tokens.py</code>
+        One summary card plus actual recall versus resending raw history.
+        Depends on the embedder, so it is only published from a real semantic
+        provider. Script: <code>evals/eval_memory_engine.py</code>
       </>
     ),
   },
@@ -98,14 +158,15 @@ const benchRows: {
     en: "Cost saved by the semantic cache",
     zhHow: (
       <>
-        LRU + Redis 语义缓存的命中率与折算成本，含误命中率。脚本：
-        <code>evals/cache.py</code>
+        LRU + Redis 语义缓存的命中率与折算成本，含误命中率。目前只有精确 key
+        缓存，语义阈值匹配属于 M5，脚本待建。
       </>
     ),
     enHow: (
       <>
-        Hit rate and resulting cost for the LRU + Redis semantic cache, including
-        the false-hit rate. Script: <code>evals/cache.py</code>
+        Hit rate and resulting cost for the LRU + Redis semantic cache,
+        including the false-hit rate. Only the exact-key cache exists today;
+        threshold matching is M5 and the script is not written.
       </>
     ),
   },
@@ -160,12 +221,16 @@ const copy = {
     pathsNote: "一条不用你动手，一条让模型自己来。两条写进同一个记忆层。",
     laneA: {
       tag: "路径 A",
+      status: "解析器待实现",
+      built: false,
       name: "被动日志解析",
       note: "不需要你做任何事。后台解析本地结构化日志，抽出今天真正发生了什么。",
       sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/archived_sessions/"],
     },
     laneB: {
       tag: "路径 B",
+      status: "已可用",
+      built: true,
       name: "主动 MCP 读写",
       note: "挂成标准 MCP server，模型在对话里自己决定何时写入、何时召回。",
       sources: ["upsert_preference", "temporal_query"],
@@ -320,12 +385,16 @@ const copy = {
       "One needs nothing from you. One lets the model do it. Both write to the same store.",
     laneA: {
       tag: "Path A",
+      status: "parser not built",
+      built: false,
       name: "Passive log parsing",
       note: "Nothing for you to do. A background pass reads the structured logs already on disk and extracts what actually happened today.",
       sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/archived_sessions/"],
     },
     laneB: {
       tag: "Path B",
+      status: "working today",
+      built: true,
       name: "Active MCP read/write",
       note: "Mounted as a standard MCP server, so the model decides mid-conversation when to write and when to recall.",
       sources: ["upsert_preference", "temporal_query"],
@@ -708,6 +777,9 @@ export function Landing() {
                   )}
                   <strong>{lane.name}</strong>
                   <em>{lane.tag}</em>
+                  <span className={`lane-status ${lane.built ? "built" : ""}`}>
+                    {lane.status}
+                  </span>
                 </div>
                 <p>{lane.note}</p>
                 <div className="lane-sources">

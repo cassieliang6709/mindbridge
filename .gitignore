@@ -30,6 +30,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the template has no secrets in it and is meant to be committed.
+!.env.example
 
 # vercel
 .vercel
@@ -43,3 +45,11 @@ next-env.d.ts
 
 # typescript incremental build cache
 *.tsbuildinfo
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/

@@ -40,34 +40,94 @@ cosine-similarity check first, so one preference stays one row.
 
 ## Current state
 
-The **front end is built**. The **backend is not** — it is being added in
-stages, and nothing in this repo pretends otherwise:
+The front end and the M1/M3 backend are built. Ingestion and the local
+extractor are not. Nothing in this repo pretends otherwise:
 
 | Piece | State |
 | --- | --- |
 | Landing page (`/`) — two paths, architecture, metrics table, signup | done |
 | Diary (`/demo`) — daily card, memory timeline, raw T1/T2/T3 disclosure | done |
-| `api/` — FastAPI ingest, three-tier store, cache | not started |
-| `mcp/` — `upsert_preference`, `temporal_query` | not started |
-| `train/` — dialogue-pair generation, QLoRA fine-tune | not started |
-| `evals/` — the four scripts behind `results.json` | not started |
+| `api/` — FastAPI, three tiers, decay retrieval, dedup, query cache | done (M1) |
+| `mcp_server/` — `upsert_preference`, `temporal_query` over stdio | done (M3) |
+| `evals/eval_memory_engine.py` — decay, dedup and token benchmarks | done |
+| Path A `jsonl` parser — reads Claude Code / Codex CLI transcripts | not started |
+| `train/` — dialogue-pair generation, QLoRA fine-tune (M2) | not started |
+| Semantic cache with threshold matching (M5) | not started |
 
-`/demo` runs on fixed sample data entirely in the browser: no model call, no
-transcript read, no database. The page says so in a banner.
+Two gaps worth naming precisely. **The diary at `/demo` is not yet wired to the
+API** — it still runs on fixed sample data in the browser, and says so in a
+banner. **Nothing ingests transcripts yet**: the engine stores and recalls what
+it is given, but the Path A parser that would read
+`~/.claude/projects/**/*.jsonl` is not written, so today memory arrives only
+through Path B (an MCP client calling `upsert_preference`).
+
+The default embedder is a **deterministic hashing fallback**: offline, no key,
+and lexical-only. It exists so the stack boots and the mechanical tests run
+anywhere. It is not a semantic model, and the eval refuses to publish
+retrieval-quality numbers measured under it.
+
+## Backend quickstart
+
+```bash
+cp .env.example .env
+docker compose up -d db redis     # Postgres+pgvector on :5433, Redis on :6379
+docker compose up -d api          # FastAPI on :8000, OpenAPI at /docs
+curl localhost:8000/healthz
+docker compose run --rm evals     # benchmark -> evals/results.json
+```
+
+Register the MCP server with Claude Desktop, Claude Code, Cursor or VS Code:
+
+```json
+{
+  "mcpServers": {
+    "mindbridge": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/absolute/path/to/mindbridge-demo",
+      "env": {
+        "MINDBRIDGE_DATABASE_URL": "postgresql://mindbridge:mindbridge@localhost:5433/mindbridge"
+      }
+    }
+  }
+}
+```
+
+Both transports call the same `MemoryService`, so `upsert_preference` over MCP
+and `POST /memories` over HTTP cannot drift apart.
+
+| Endpoint | Tier | Purpose |
+| --- | --- | --- |
+| `POST /sessions/{id}/turns` · `GET /sessions/{id}/buffer` | T1 | append and read the raw window |
+| `POST /summaries` · `GET /summaries` | T2 | write and list period cards |
+| `POST /memories` | T3 | dedup-then-write a preference |
+| `POST /memories/query` | T3 | time-decayed top-K recall |
 
 ## Metrics policy
 
-`evals/results.json` ships with every metric `null`, and the landing page
-renders `null` as an amber **in progress** badge instead of a number. A figure
-appears only once a script in `evals/` has produced it. Every number on the page
-should be reproducible on request.
+The landing page reads `evals/results.json` and renders any `null` as an amber
+**in progress** badge instead of a number. A figure appears only once
+`evals/eval_memory_engine.py` has produced it against a live database, so every
+number on the page is reproducible with one command.
 
-| Metric | Script |
-| --- | --- |
-| Preference-extraction JSON validity | `evals/extraction.py` |
-| Extraction API cost delta (hosted vs. local vLLM) | `evals/cost_extraction.py` |
-| Per-turn prompt token reduction | `evals/tokens.py` |
-| Cost saved by the semantic cache | `evals/cache.py` |
+Measurements split by whether they depend on embedding quality. The two
+mechanical invariants publish from any run; the rest stay null until a real
+semantic provider is configured.
+
+| Metric | Depends on embedder | Script |
+| --- | --- | --- |
+| Time-decay scoring correctness | no | `evals/eval_memory_engine.py` |
+| Superseded-record isolation | no | `evals/eval_memory_engine.py` |
+| Write-time dedup accuracy | yes | `evals/eval_memory_engine.py` |
+| Per-turn prompt token reduction | yes | `evals/eval_memory_engine.py` |
+| Preference-extraction JSON validity | yes | not written (M2) |
+| Extraction API cost delta | yes | not written (M2) |
+| Cost saved by the semantic cache | yes | not written (M5) |
+
+"Time-decay scoring correctness" stores identical content at several ages and
+checks both newest-first ordering and that every score matches
+`cosine · exp(-λ·Δt)` to within 1e-6. It is a formula check, not a claim about
+retrieval quality — the table on the site says so too.
 
 ## Planned architecture
 
@@ -121,5 +181,7 @@ keyed by locale (`zh` / `en`); technical identifiers stay English in both.
 
 ## Stack
 
-Next.js, React, TypeScript, CSS. Planned backend: Python, FastAPI, Unsloth,
-vLLM, MCP, Postgres + pgvector, Redis, Docker.
+**Front end** — Next.js, React, TypeScript, CSS.
+**Backend** — Python 3.11, FastAPI, asyncpg, Postgres 16 + pgvector, Redis,
+the MCP Python SDK, Docker Compose.
+**Planned** — Unsloth/QLoRA and vLLM for the local extractor (M2).
