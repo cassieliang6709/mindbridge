@@ -34,7 +34,7 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "MindBridge — your AI conversations, written up as daily memory",
   description:
-    "MindBridge parses the transcripts your local AI coding tools already write, turns each day into one memory card, and serves the same three-tier store to any MCP client. Nothing leaves your machine.",
+    "MindBridge parses the transcripts your local AI coding tools already write, turns each day into one memory card, and serves the same three-tier store to any MCP client. Parsing and storage are local by default.",
 };
 
 export default function RootLayout({

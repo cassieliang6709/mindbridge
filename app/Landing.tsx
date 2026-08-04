@@ -184,7 +184,7 @@ const copy = {
     htmlLang: "zh-CN",
     docTitle: "MindBridge — 自动把你的 AI 对话写成每日记忆",
     docDesc:
-      "MindBridge 解析本地 AI 编码工具的对话记录，自动生成每日记忆卡，并作为 MCP server 让任意客户端读写这份长期记忆。全程不出本机。",
+      "MindBridge 解析本地 AI 编码工具的对话记录，自动生成每日记忆卡，并作为 MCP server 让任意客户端读写这份长期记忆。解析与存储默认全在本机。",
     nav: ["两条捕获路径", "技术结构", "指标"],
     demo: "打开日记界面",
     stage: "施工中 · 后端逐步接入",
@@ -196,7 +196,7 @@ const copy = {
         自动写成 <em>每日记忆</em>。
       </>
     ),
-    lede: "MindBridge 解析你本地 AI 编码工具的对话记录，每晚生成一张记忆卡；同时作为 MCP server，让任意客户端读写这份长期记忆。全程不出本机。",
+    lede: "MindBridge 解析你本地 AI 编码工具的对话记录，每晚生成一张记忆卡；同时作为 MCP server，让任意客户端读写这份长期记忆。解析与存储都在本机。",
     learn: "看两条捕获路径",
     // phone 1 — daily card
     cardDate: "2026-08-04 · 周二",
@@ -352,7 +352,7 @@ const copy = {
     htmlLang: "en",
     docTitle: "MindBridge — your AI conversations, written up as daily memory",
     docDesc:
-      "MindBridge parses the transcripts your local AI coding tools already write, turns each day into a memory card, and serves the same store to any MCP client. Nothing leaves your machine.",
+      "MindBridge parses the transcripts your local AI coding tools already write, turns each day into a memory card, and serves the same store to any MCP client. Parsing and storage are local by default.",
     nav: ["Two capture paths", "Architecture", "Metrics"],
     demo: "Open the diary",
     stage: "In progress · backend landing in stages",
@@ -364,7 +364,7 @@ const copy = {
         written up as <em>daily memory</em>.
       </>
     ),
-    lede: "MindBridge parses the transcripts your local AI coding tools already write and turns each night into one memory card — while serving the same store to any MCP client. Nothing leaves your machine.",
+    lede: "MindBridge parses the transcripts your local AI coding tools already write and turns each night into one memory card — while serving the same store to any MCP client. Parsing and storage stay on your machine.",
     learn: "See both capture paths",
     cardDate: "2026-08-04 · Tue",
     cardMeta: "auto-generated",

@@ -6,8 +6,7 @@
  * /api/waitlist at a real destination. With nothing configured the form falls
  * back to a pre-filled mailto: draft, so signups still reach a human.
  */
-export const GITHUB_URL =
-  "https://github.com/cassieliang6709/mindbridge-reflective-demo";
+export const GITHUB_URL = "https://github.com/cassieliang6709/mindbridge";
 
 export const CONTACT_EMAIL = "liangyue3666@gmail.com";
 
