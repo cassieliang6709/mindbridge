@@ -23,13 +23,21 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from api.memory import IngestRow
 from api.models import SummaryCardCreate
 from api.service import MemoryService
 from api.settings import get_settings
 
 from . import claude_code, codex_cli
 from .cursors import CursorStore
-from .digest import digest_for_period, format_digest
+from .digest import (
+    build_digest,
+    day_bounds,
+    digest_for_period,
+    format_digest,
+    group_by_day,
+    rows_to_turns,
+)
 from .models import DayDigest, ParsedTurn, ParseOutcome, SourceKind
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -136,14 +144,17 @@ async def ingest(
 
             new_rows = await service.turns.append_many(
                 [
-                    (
-                        f"{turn.source}:{turn.session_id}",
-                        turn.role,
-                        turn.text,
-                        turn.source,
-                        turn.token_count,
-                        turn.created_at,
-                        turn.source_key,
+                    IngestRow(
+                        session_id=f"{turn.source}:{turn.session_id}",
+                        role=turn.role,
+                        content=turn.text,
+                        tool=turn.source,
+                        token_count=turn.token_count,
+                        created_at=turn.created_at,
+                        source_key=turn.source_key,
+                        project=turn.project,
+                        git_branch=turn.git_branch,
+                        tool_names=turn.tool_names,
                     )
                     for turn in turns
                 ]
@@ -157,10 +168,24 @@ async def ingest(
                 turns[-1].source_key if turns else cursor.last_uuid,
             )
 
-    digests = digest_for_period(all_turns, tz_name)
+    tz = ZoneInfo(tz_name)
 
-    if write_summaries and not dry_run:
-        for digest in digests:
+    if dry_run:
+        # Nothing was written, so the only thing to describe is what was parsed.
+        return digest_for_period(all_turns, tz_name), totals
+
+    # Rebuild each touched day from the DATABASE, over the whole local day.
+    # Building it from `all_turns` would describe only what this run parsed, so
+    # an incremental run would overwrite a full card with a partial one — a
+    # nightly job would shrink every card it touched.
+    dates = sorted(group_by_day(all_turns, tz))
+    digests: list[DayDigest] = []
+    for date in dates:
+        start, end = day_bounds(date, tz)
+        rows = await service.turns.rows_for_digest(start, end)
+        digest = build_digest(date, rows_to_turns(rows), tz)
+        digests.append(digest)
+        if write_summaries:
             await service.write_summary(
                 SummaryCardCreate(
                     period=digest.date,
@@ -248,6 +273,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--claude-root", type=Path, default=None)
     parser.add_argument("--codex-root", type=Path, default=None)
     parser.add_argument(
+        "--rebuild-cards",
+        metavar="DATE",
+        nargs="+",
+        help=(
+            "Rebuild the T2 card for these local dates (YYYY-MM-DD) from T1, "
+            "without reading any transcript. Use after changing digest rules."
+        ),
+    )
+    parser.add_argument(
         "--status", action="store_true", help="Print ingestion state and exit."
     )
     parser.add_argument(
@@ -282,6 +316,25 @@ async def main_async(argv: list[str] | None = None) -> int:
     try:
         if args.status:
             await show_status(service)
+            return 0
+        if args.rebuild_cards:
+            tz = ZoneInfo(args.timezone)
+            rebuilt: list[DayDigest] = []
+            for date in args.rebuild_cards:
+                start, end = day_bounds(date, tz)
+                rows = await service.turns.rows_for_digest(start, end)
+                digest = build_digest(date, rows_to_turns(rows), tz)
+                await service.write_summary(
+                    SummaryCardCreate(
+                        period=digest.date,
+                        summary=digest.summary,
+                        developer_behavior_facts=digest.facts,
+                        session_id=None,
+                    )
+                )
+                rebuilt.append(digest)
+            for digest in rebuilt:
+                print(format_digest(digest))
             return 0
         if args.reset_cursors:
             removed = await CursorStore(service._pool).reset()  # noqa: SLF001
@@ -321,7 +374,8 @@ async def main_async(argv: list[str] | None = None) -> int:
 
     if digests:
         shown = digests[-args.limit_days :]
-        print(f"\n=== day cards ({len(digests)} total, showing {len(shown)})")
+        source = "parsed this run" if args.dry_run else "rebuilt from T1"
+        print(f"\n=== day cards ({len(digests)} total, showing {len(shown)}, {source})")
         for digest in shown:
             print(format_digest(digest))
         print(

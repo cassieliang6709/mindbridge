@@ -92,6 +92,18 @@ CREATE TABLE IF NOT EXISTS ingest_cursors (
 ALTER TABLE session_turns
     ADD COLUMN IF NOT EXISTS source_key TEXT;
 
+-- Metadata the T2 digest needs. Persisted per turn so a day card can be
+-- rebuilt from the database over the WHOLE day, instead of from whatever an
+-- incremental run happened to parse. Without these columns a nightly run
+-- rewrites the card using only that run's delta, which silently shrinks it.
+ALTER TABLE session_turns
+    ADD COLUMN IF NOT EXISTS project    TEXT,
+    ADD COLUMN IF NOT EXISTS git_branch TEXT,
+    ADD COLUMN IF NOT EXISTS tool_names JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE INDEX IF NOT EXISTS session_turns_created_idx
+    ON session_turns (created_at);
+
 CREATE UNIQUE INDEX IF NOT EXISTS session_turns_source_key_idx
     ON session_turns (source_key)
     WHERE source_key IS NOT NULL;

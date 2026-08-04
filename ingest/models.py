@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SourceKind = Literal["claude-code", "codex-cli"]
 
@@ -45,6 +45,17 @@ class ParsedTurn(BaseModel):
     )
     git_branch: str | None = None
     redactions: int = 0
+
+    @field_validator("text")
+    @classmethod
+    def strip_nul(cls, value: str) -> str:
+        """Postgres text cannot hold 0x00, and transcripts do contain it.
+
+        Tool output occasionally carries a NUL — reading a binary file, or a
+        process writing raw bytes. Dropping it here covers every reader at once
+        instead of relying on each one to remember.
+        """
+        return value.replace("\x00", "") if "\x00" in value else value
 
 
 class FileCursor(BaseModel):

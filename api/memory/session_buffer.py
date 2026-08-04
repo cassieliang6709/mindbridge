@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import asyncpg
 
 from ..models import SessionBuffer, Turn, TurnCreate
 from .tokens import count_tokens
+
+
+@dataclass(slots=True)
+class IngestRow:
+    """One turn on its way into T1 from a transcript reader."""
+
+    session_id: str
+    role: str
+    content: str
+    tool: str | None
+    token_count: int
+    created_at: datetime
+    source_key: str
+    project: str | None = None
+    git_branch: str | None = None
+    tool_names: list[str] = field(default_factory=list)
 
 
 class SessionBufferStore:
@@ -39,49 +57,96 @@ class SessionBufferStore:
     # Claude Code writes one JSONL record per content block and repeats the
     # response's usage on each, so the ingest reader merges them by message id
     # before this point. Summing per record inflated tokens by 2.5x.
-    async def append_many(
-        self,
-        rows: list[tuple[str, str, str, str | None, int, object, str]],
-    ) -> int:
+    async def append_many(self, rows: list[IngestRow]) -> int:
         """Bulk insert for Path A ingestion.
 
-        Rows are (session_id, role, content, tool, token_count, created_at,
-        source_key). ON CONFLICT on source_key makes re-ingesting a file a
-        no-op, so a lost or reset cursor cannot produce duplicate turns.
-        Returns how many rows were actually new.
+        ON CONFLICT on source_key makes re-ingesting a file a no-op, so a lost
+        or reset cursor cannot produce duplicate turns. Returns how many rows
+        were actually new.
         """
         if not rows:
             return 0
+        # Postgres rejects an ON CONFLICT DO UPDATE whose input proposes the
+        # same key twice ("cannot affect row a second time"), and real
+        # transcripts do repeat a uuid — the same session can be written under
+        # two project directories. Collapse to the first occurrence, which is
+        # also the one whose byte offset the cursor will record.
+        seen: dict[str, IngestRow] = {}
+        for row in rows:
+            seen.setdefault(row.source_key, row)
+        rows = list(seen.values())
         inserted = await self._pool.fetchval(
             """
             WITH input AS (
                 SELECT * FROM unnest(
                     $1::text[], $2::text[], $3::text[], $4::text[],
-                    $5::int[], $6::timestamptz[], $7::text[]
+                    $5::int[], $6::timestamptz[], $7::text[],
+                    $8::text[], $9::text[], $10::jsonb[]
                 ) AS t(session_id, role, content, tool, token_count,
-                       created_at, source_key)
+                       created_at, source_key, project, git_branch, tool_names)
             ), ins AS (
                 INSERT INTO session_turns
                     (session_id, role, content, tool, token_count,
-                     created_at, source_key)
+                     created_at, source_key, project, git_branch, tool_names)
                 SELECT session_id, role, content, tool, token_count,
-                       created_at, source_key
+                       created_at, source_key, project, git_branch, tool_names
                 FROM input
+                -- DO UPDATE rather than DO NOTHING so a re-run backfills
+                -- metadata onto rows stored before those columns existed.
+                -- COALESCE keeps existing values, so this can only add
+                -- information, never blank a row out.
                 ON CONFLICT (source_key) WHERE source_key IS NOT NULL
-                DO NOTHING
-                RETURNING 1
+                DO UPDATE SET
+                    project = COALESCE(EXCLUDED.project, session_turns.project),
+                    git_branch = COALESCE(
+                        EXCLUDED.git_branch, session_turns.git_branch
+                    ),
+                    tool_names = CASE
+                        WHEN jsonb_array_length(session_turns.tool_names) = 0
+                        THEN EXCLUDED.tool_names
+                        ELSE session_turns.tool_names
+                    END
+                -- xmax = 0 identifies a genuine INSERT, so the caller can
+                -- report new turns without counting backfilled ones.
+                RETURNING (xmax = 0) AS inserted
             )
-            SELECT count(*) FROM ins
+            SELECT count(*) FILTER (WHERE inserted) FROM ins
             """,
-            [row[0] for row in rows],
-            [row[1] for row in rows],
-            [row[2] for row in rows],
-            [row[3] for row in rows],
-            [row[4] for row in rows],
-            [row[5] for row in rows],
-            [row[6] for row in rows],
+            [row.session_id for row in rows],
+            [row.role for row in rows],
+            [row.content for row in rows],
+            [row.tool for row in rows],
+            [row.token_count for row in rows],
+            [row.created_at for row in rows],
+            [row.source_key for row in rows],
+            [row.project for row in rows],
+            [row.git_branch for row in rows],
+            [json.dumps(row.tool_names) for row in rows],
         )
         return int(inserted or 0)
+
+    async def rows_for_digest(
+        self, start: datetime, end: datetime
+    ) -> list[asyncpg.Record]:
+        """Every turn in a range, with the metadata a day card is built from.
+
+        Unlike list_between() this has no limit: a card must describe the whole
+        day,
+        so a page of it would produce a card that understates the day.
+        """
+        return list(
+            await self._pool.fetch(
+                """
+                SELECT session_id, role, tool, token_count, created_at,
+                       project, git_branch, tool_names
+                FROM session_turns
+                WHERE created_at >= $1 AND created_at < $2
+                ORDER BY created_at ASC, id ASC
+                """,
+                start,
+                end,
+            )
+        )
 
     async def read(self, session_id: str, window: int | None = None) -> SessionBuffer:
         """The live window, newest last, plus how many turns have aged out."""

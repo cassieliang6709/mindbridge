@@ -13,8 +13,10 @@ contain. That is a deliberate limit, not an oversight:
 
 from __future__ import annotations
 
+import json
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 from .models import DayDigest, DayStats, ParsedTurn
@@ -171,7 +173,36 @@ def format_digest(digest: DayDigest) -> str:
     return "\n".join(lines)
 
 
-def utc_now() -> datetime:
-    from datetime import timezone
+def day_bounds(date: str, tz: ZoneInfo) -> tuple[datetime, datetime]:
+    """The UTC instants bracketing one local calendar day."""
+    midnight = datetime.fromisoformat(f"{date}T00:00:00").replace(tzinfo=tz)
+    return midnight, midnight + timedelta(days=1)
 
-    return datetime.now(timezone.utc)
+
+def rows_to_turns(rows: Iterable[Mapping[str, Any]]) -> list[ParsedTurn]:
+    """Rebuild ParsedTurns from stored T1 rows.
+
+    Only the fields the digest reads are reconstructed — the text is not needed
+    to count a day, so it is left out of the query entirely.
+    """
+    turns: list[ParsedTurn] = []
+    for row in rows:
+        tool_names = row["tool_names"]
+        if isinstance(tool_names, str):
+            tool_names = json.loads(tool_names)
+        source = row["tool"] or "claude-code"
+        turns.append(
+            ParsedTurn(
+                source=source,  # type: ignore[arg-type]
+                session_id=row["session_id"],
+                source_key="",
+                role=row["role"],
+                text="",
+                created_at=row["created_at"],
+                token_count=row["token_count"] or 0,
+                tool_names=list(tool_names or []),
+                project=row["project"],
+                git_branch=row["git_branch"],
+            )
+        )
+    return turns

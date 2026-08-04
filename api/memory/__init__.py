@@ -6,13 +6,14 @@ T3 vector_store    — long-term preferences with time decay
 """
 
 from .rolling_summary import RollingSummaryStore
-from .session_buffer import SessionBufferStore
+from .session_buffer import IngestRow, SessionBufferStore
 from .tokens import count_many, count_tokens, tokenizer_name
 from .vector_store import NearestMatch, VectorMemoryStore
 
 __all__ = [
     "NearestMatch",
     "RollingSummaryStore",
+    "IngestRow",
     "SessionBufferStore",
     "VectorMemoryStore",
     "count_many",

@@ -38,6 +38,11 @@ Every T3 record carries `created_at` and `valid_at`, so a superseded preference
 decays out of recall instead of being silently overwritten. Writes run a
 cosine-similarity check first, so one preference stays one row.
 
+T1 also stores the project, git branch and tool names of each turn. That is what
+lets a day card be rebuilt over the whole day from Postgres: building it from
+only the turns an incremental run happened to parse would rewrite a full card
+with a partial one, so a nightly job would shrink every card it touched.
+
 ## Current state
 
 The front end and the M1/M3 backend are built. Ingestion and the local
@@ -52,7 +57,7 @@ extractor are not. Nothing in this repo pretends otherwise:
 | `evals/eval_memory_engine.py` — decay, dedup and token benchmarks | done |
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `/demo` wired to the API, with an offline fallback | done |
-| Scheduler for Path A (cron / launchd) | not started |
+| Nightly scheduler for Path A (launchd, opt-in) | done |
 | `train/` — dialogue-pair generation, QLoRA fine-tune (M2) | not started |
 | Semantic cache with threshold matching (M5) | not started |
 
@@ -152,6 +157,29 @@ Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files
 had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,
 with 8 suspected secrets masked. A second run read 2 files; `--full` re-read all
 3,065 turns and inserted 0.
+
+## Running Path A on a schedule
+
+```bash
+scripts/mindbridge-scheduler.sh status      # installed? when did it last run?
+scripts/mindbridge-scheduler.sh run-now     # run once, in the foreground
+scripts/mindbridge-scheduler.sh install     # schedule it nightly at 23:30
+scripts/mindbridge-scheduler.sh uninstall   # remove the schedule
+```
+
+`install` writes `~/Library/LaunchAgents/com.mindbridge.nightly-ingest.plist`
+and registers it with launchd. That is a persistent change to the machine, so it
+is opt-in and never happens as part of a build or a test — `status` and
+`run-now` change nothing. Override the hour with `MINDBRIDGE_INGEST_HOUR` /
+`MINDBRIDGE_INGEST_MINUTE`.
+
+The job is safe to repeat: turns are keyed by source record, and day cards are
+rebuilt from the database rather than from the delta. If Docker Desktop is not
+running it logs a skip, leaves the cursors untouched and exits 0, so the next
+run resumes exactly where this one would have. Logs land in
+`~/Library/Logs/mindbridge/ingest.log`, rotated once at 5 MB.
+
+An incremental run takes about seven seconds on an already-ingested corpus.
 
 ## Metrics policy
 
