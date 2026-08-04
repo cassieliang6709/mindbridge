@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import asyncpg
 
 from ..models import SessionBuffer, Turn, TurnCreate
@@ -109,6 +111,43 @@ class SessionBufferStore:
             turns=turns,
             tokens_in_window=sum(turn.token_count for turn in turns),
             evicted_count=max(0, int(total or 0) - len(turns)),
+        )
+
+    async def list_between(
+        self,
+        start: datetime,
+        end: datetime,
+        limit: int = 50,
+        source: str | None = None,
+    ) -> list[Turn]:
+        """Turns in a half-open [start, end) window, oldest first."""
+        rows = await self._pool.fetch(
+            """
+            SELECT id, session_id, role, content, tool, token_count, created_at
+            FROM session_turns
+            WHERE created_at >= $1 AND created_at < $2
+              AND ($4::text IS NULL OR tool = $4)
+            ORDER BY created_at ASC, id ASC
+            LIMIT $3
+            """,
+            start,
+            end,
+            limit,
+            source,
+        )
+        return [Turn(**dict(row)) for row in rows]
+
+    async def count_between(self, start: datetime, end: datetime) -> int:
+        return int(
+            await self._pool.fetchval(
+                """
+                SELECT count(*) FROM session_turns
+                WHERE created_at >= $1 AND created_at < $2
+                """,
+                start,
+                end,
+            )
+            or 0
         )
 
     async def evicted(self, session_id: str, window: int | None = None) -> list[Turn]:

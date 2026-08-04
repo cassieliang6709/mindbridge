@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Annotated, AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
+from pydantic import BaseModel
 
 from .models import (
+    MemoryWithDecay,
     SessionBuffer,
     SummaryCard,
     SummaryCardCreate,
@@ -23,6 +26,14 @@ from .service import MemoryService
 from .settings import get_settings
 
 logging.basicConfig(level=logging.INFO)
+
+
+class TurnWindow(BaseModel):
+    """Turns in a range, plus how many exist beyond the returned page."""
+
+    turns: list[Turn]
+    total: int
+    returned: int
 
 
 @asynccontextmanager
@@ -111,6 +122,37 @@ async def upsert_preference(
 ) -> UpsertPreferenceResult:
     """Same code path as the MCP `upsert_preference` tool."""
     return await service.upsert_preference(request)
+
+
+@app.get("/memories", tags=["T3 vector memory"])
+async def list_memories(
+    service: ServiceDep,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    include_superseded: Annotated[bool, Query()] = True,
+) -> list[MemoryWithDecay]:
+    """Newest-first listing for the diary timeline.
+
+    Deliberately not a search: no query means no cosine term, so each row
+    carries only its decay weight. This does not bump access_count — drawing a
+    timeline is not the model recalling something.
+    """
+    return await service.list_memories(limit, include_superseded)
+
+
+@app.get("/turns", tags=["T1 session buffer"])
+async def list_turns(
+    service: ServiceDep,
+    start: Annotated[datetime, Query(description="inclusive, ISO 8601")],
+    end: Annotated[datetime, Query(description="exclusive, ISO 8601")],
+    limit: Annotated[int, Query(ge=1, le=200)] = 40,
+) -> TurnWindow:
+    """Raw turns in a time range — what the 'look underneath' panel shows.
+
+    The range is passed as timestamps rather than a date so the caller owns the
+    timezone; the server never has to guess which midnight was meant.
+    """
+    turns, total = await service.list_turns_between(start, end, limit)
+    return TurnWindow(turns=turns, total=total, returned=len(turns))
 
 
 @app.post("/memories/query", tags=["T3 vector memory"])

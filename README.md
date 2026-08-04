@@ -51,14 +51,20 @@ extractor are not. Nothing in this repo pretends otherwise:
 | `mcp_server/` — `upsert_preference`, `temporal_query` over stdio | done (M3) |
 | `evals/eval_memory_engine.py` — decay, dedup and token benchmarks | done |
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
+| `/demo` wired to the API, with an offline fallback | done |
+| Scheduler for Path A (cron / launchd) | not started |
 | `train/` — dialogue-pair generation, QLoRA fine-tune (M2) | not started |
 | Semantic cache with threshold matching (M5) | not started |
 
-One gap worth naming precisely: **the diary at `/demo` is not yet wired to the
-API.** It still runs on fixed sample data in the browser and says so in a
-banner, even though real ingested cards now exist in Postgres.
+The diary at `/demo` now reads the backend through `/api/diary`. When the API is
+reachable it renders real cards, real T1 turns and the real T3 timeline, and the
+banner turns green. When it is not — which is the case on the deployed site,
+since the backend runs on one laptop — it falls back to sample data, turns the
+banner amber, and names the unreachable URL. The distinction is carried in the
+payload's `source` field rather than inferred from a failed request, so sample
+rows can never be presented as if they came from Postgres.
 
-A second limit is by design: Path A produces **rule-based** day cards — counts,
+A limit is by design: Path A produces **rule-based** day cards — counts,
 tool tallies, time spans, git branches. It does not narrate a day in prose or
 extract durable preferences from it, because both need the M2 local extractor.
 Preferences therefore still arrive only through Path B, i.e. a model deciding to
@@ -138,6 +144,8 @@ and `POST /memories` over HTTP cannot drift apart.
 | `POST /sessions/{id}/turns` · `GET /sessions/{id}/buffer` | T1 | append and read the raw window |
 | `POST /summaries` · `GET /summaries` | T2 | write and list period cards |
 | `POST /memories` | T3 | dedup-then-write a preference |
+| `GET /memories` | T3 | newest-first listing with decay weight (no cosine, no access bump) |
+| `GET /turns?start=&end=` | T1 | raw turns in a range; the caller owns the timezone |
 | `POST /memories/query` | T3 | time-decayed top-K recall |
 
 Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files

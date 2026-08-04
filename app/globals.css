@@ -1138,6 +1138,14 @@ h3 {
   line-height: 1.4;
 }
 
+/* Live data gets a green banner; the amber one means sample/offline, matching
+   the amber "in progress" language used for unmeasured metrics. */
+.console-banner.live {
+  border-color: rgba(143, 219, 168, 0.4);
+  background: rgba(23, 74, 45, 0.3);
+  color: #b8e6c8;
+}
+
 .console-banner svg {
   flex: none;
   width: 16px;

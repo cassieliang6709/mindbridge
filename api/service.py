@@ -8,6 +8,7 @@ over MCP and `POST /memories` over HTTP cannot drift apart.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Self
 
 import asyncpg
@@ -23,6 +24,7 @@ from .memory import (
 )
 from .models import (
     MemoryHit,
+    MemoryWithDecay,
     SessionBuffer,
     SummaryCard,
     SummaryCardCreate,
@@ -184,6 +186,20 @@ class MemoryService:
             matched_similarity=similarity,
             reason=reason,
         )
+
+    async def list_memories(
+        self, limit: int = 50, include_superseded: bool = True
+    ) -> list[MemoryWithDecay]:
+        return await self.vectors.list_recent(
+            limit=limit, include_superseded=include_superseded
+        )
+
+    async def list_turns_between(
+        self, start: datetime, end: datetime, limit: int = 40
+    ) -> tuple[list[Turn], int]:
+        turns = await self.turns.list_between(start, end, limit)
+        total = await self.turns.count_between(start, end)
+        return turns, total
 
     async def temporal_query(
         self, request: TemporalQueryRequest

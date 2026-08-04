@@ -1,260 +1,247 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   CaretRight,
   Check,
+  Database,
   GithubLogo,
   Moon,
   Warning,
 } from "@phosphor-icons/react";
 import { DEFAULT_LOCALE, GITHUB_URL, type Locale } from "../site";
+import type { DiaryCard, DiaryMemory, DiaryTurn } from "../api/diary/route";
+import { SAMPLE_DAYS, SAMPLE_MEMORIES, type SampleDay } from "./sample";
 
 /* ---------------------------------------------------------------------------
-   The diary UI: what MindBridge produces for a person, not for a client
-   library. Each day is one card written from that day's transcripts; the
-   "look underneath" disclosure shows the T1/T2/T3 state the card came from,
-   so the surface stays warm without hiding the mechanism.
-
-   The data below is a fixed sample. Nothing here calls a model or a database —
-   the banner says so, and the backend is still being built.
+   The diary reads the FastAPI backend through /api/diary. When the backend is
+   not running — which is the case on the deployed site, since it lives on this
+   machine — it falls back to the sample data and says so. The distinction is
+   carried in the payload's `source`, never inferred, so sample rows can never
+   be presented as if they came from Postgres.
 --------------------------------------------------------------------------- */
 
-type Memory = {
-  id: string;
-  zh: string;
-  en: string;
-  createdAt: string;
-  weight: number;
-  supersededBy?: string;
-};
+type Mode = "loading" | "live" | "offline";
 
-type Day = {
-  date: string;
-  weekdayZh: string;
-  weekdayEn: string;
-  zhSummary: string;
-  enSummary: string;
-  zhItems: string[];
-  enItems: string[];
-  /** ids of memories this day wrote or refreshed */
-  wrote: string[];
-  zhBehaviour: string;
-  enBehaviour: string;
-  behaviourMeta: string;
-  zhScribble: string;
-  enScribble: string;
-  /** raw turns the card was written from (T1) */
-  turns: { tool: string; text: string }[];
-  /** structured facts the extractor produced (T2) */
-  facts: string[];
-  sources: string;
-};
-
-const memories: Memory[] = [
-  {
-    id: "m_0104",
-    zh: "Python 项目优先用 uv",
-    en: "Prefer uv for Python projects",
-    createdAt: "2026-08-04",
-    weight: 0.98,
-  },
-  {
-    id: "m_0091",
-    zh: "周末不排会议",
-    en: "No meetings on weekends",
-    createdAt: "2026-07-28",
-    weight: 0.91,
-  },
-  {
-    id: "m_0088",
-    zh: "周六早上健身",
-    en: "Gym on Saturday mornings",
-    createdAt: "2026-07-19",
-    weight: 0.74,
-  },
-  {
-    id: "m_0079",
-    zh: "回答要直接，少寒暄",
-    en: "Answer directly, skip the preamble",
-    createdAt: "2026-07-11",
-    weight: 0.66,
-  },
-  {
-    id: "m_0031",
-    zh: "周末可以加班",
-    en: "Open to weekend work",
-    createdAt: "2026-03-04",
-    weight: 0.29,
-    supersededBy: "m_0091",
-  },
-];
-
-const days: Day[] = [
-  {
-    date: "2026-08-04",
-    weekdayZh: "周二",
-    weekdayEn: "Tue",
-    zhSummary: "今天大半时间在打通检索链路",
-    enSummary: "Most of today went into the retrieval path",
-    zhItems: [
-      "用 FastAPI 搭好 /retrieve 雏形，修掉 3 个 500。",
-      "在 Codex 里过了 3 道 Graph 题，卡在拓扑排序。",
-      "把包管理从 pip 换成 uv，重装了两个环境。",
-    ],
-    enItems: [
-      "Stood up /retrieve in FastAPI and cleared three 500s.",
-      "Worked three graph problems in Codex; stuck on topological sort.",
-      "Switched package management from pip to uv, rebuilt two envs.",
-    ],
-    wrote: ["m_0104"],
-    zhBehaviour: "凌晨 1:12 还有提交，比前一天晚了约两小时。",
-    enBehaviour: "Last commit at 1:12am — about two hours later than yesterday.",
-    behaviourMeta: "last_activity 01:12 · prev_day 23:04",
-    zhScribble: "今天你自己没写一个字。",
-    enScribble: "You wrote none of this yourself.",
-    turns: [
-      { tool: "claude-code", text: "为什么 /retrieve 在空 query 上返回 500？" },
-      { tool: "claude-code", text: "以后所有 Python 项目都用 uv，别再用 pip。" },
-      { tool: "codex-cli", text: "解释一下 Kahn 算法怎么检测环。" },
-    ],
-    facts: [
-      "偏好：Python 项目优先用 uv / prefer uv",
-      "进度：/retrieve 端点可用，500 已修 / endpoint works",
-      "卡点：拓扑排序 / topological sort",
-    ],
-    sources: "3 sessions · 2 tools · 41 turns",
-  },
-  {
-    date: "2026-08-03",
-    weekdayZh: "周一",
-    weekdayEn: "Mon",
-    zhSummary: "调 pgvector 的召回质量",
-    enSummary: "Tuning recall quality in pgvector",
-    zhItems: [
-      "把 embedding 维度从 1536 降到 768，重建索引。",
-      "发现旧偏好一直被召回，加了时间衰减权重。",
-      "跟 Claude 讨论要不要拆出独立的 summary 表。",
-    ],
-    enItems: [
-      "Dropped embeddings from 1536 to 768 dims and rebuilt the index.",
-      "Found stale preferences ranking too high; added time decay.",
-      "Talked through splitting summaries into their own table.",
-    ],
-    wrote: ["m_0091"],
-    zhBehaviour: "连续 4 小时同一个 session，没有中断。",
-    enBehaviour: "One unbroken four-hour session.",
-    behaviourMeta: "longest_session 4h02m",
-    zhScribble: "衰减这件事是今天才想通的。",
-    enScribble: "Decay only clicked today.",
-    turns: [
-      { tool: "claude-code", text: "为什么三月那条偏好还排在第一？" },
-      { tool: "claude-code", text: "帮我给召回加一个时间衰减项。" },
-    ],
-    facts: [
-      "决定：召回引入时间衰减 / add time decay",
-      "参数：embedding 768 dims",
-    ],
-    sources: "2 sessions · 1 tool · 63 turns",
-  },
-  {
-    date: "2026-08-02",
-    weekdayZh: "周日",
-    weekdayEn: "Sun",
-    zhSummary: "只看了会儿论文，没写代码",
-    enSummary: "Read a bit, wrote no code",
-    zhItems: [
-      "读了两篇长期记忆相关的 paper，做了笔记。",
-      "没有开新的 coding session。",
-    ],
-    enItems: [
-      "Read two papers on long-term memory and took notes.",
-      "No coding session opened.",
-    ],
-    wrote: [],
-    zhBehaviour: "周末没有排会议，与已记录的偏好一致。",
-    enBehaviour: "No meetings booked this weekend — matches the stored preference.",
-    behaviourMeta: "meetings 0 · matches m_0091",
-    zhScribble: "休息也是一条记录。",
-    enScribble: "Rest is a record too.",
-    turns: [{ tool: "claude-desktop", text: "帮我总结这篇 MemGPT 的核心思路。" }],
-    facts: ["活动：阅读，无代码提交 / reading, no commits"],
-    sources: "1 session · 1 tool · 8 turns",
-  },
-];
+type DiaryPayload =
+  | {
+      source: "live";
+      selected: string | null;
+      cards: DiaryCard[];
+      memories: DiaryMemory[];
+      turns: DiaryTurn[];
+      turnsTotal: number;
+    }
+  | { source: "offline"; apiBase: string; reason: string };
 
 const copy = {
   zh: {
     back: "返回首页",
-    eyebrow: "日记界面 · 示例数据",
+    eyebrowLive: "日记界面 · 真实数据",
+    eyebrowSample: "日记界面 · 示例数据",
+    eyebrowLoading: "日记界面 · 读取中",
     title: "MindBridge 记忆日记",
     lede: "每天一张卡，由当天的 AI 对话自动写成。你不用动手，也可以随时展开看它是从哪几条原始记录来的。",
-    banner:
-      "这里是固定的示例数据，用来展示界面形态。它不调用任何模型、不读你本机的 transcript、也不连数据库；日志解析与 MCP server 还在建。",
+    liveBanner: (cards: number, turns: number, memories: number) =>
+      `真实数据：${cards} 张日记卡由 Path A 从本机 transcript 解析生成，T1 有 ${turns} 轮记录、T3 有 ${memories} 条长期偏好。卡片内容是规则算出来的计数，不是模型写的散文 —— 叙述与偏好抽取要等 M2。`,
+    offlineBanner: (base: string) =>
+      `连不上后端（${base}），下面显示的是固定示例数据。本机跑 docker compose up -d api 之后刷新即可看到真实卡片。`,
+    loadingBanner: "正在读取后端…",
     book: "预约真机演示",
     dayTitle: "日期",
-    cardMeta: "自动生成",
+    cardMetaLive: "Path A 生成",
+    cardMetaSample: "示例",
     items: "今天发生了什么",
-    wrote: "写入的偏好",
-    noWrote: "今天没有新偏好写入。",
+    wrote: "当天写入的偏好",
+    noWrote: "当天没有新偏好写入 —— 偏好靠 MCP 客户端调用 upsert_preference 写进来，Path A 只算事实。",
     behaviour: "行为观察",
     behaviourNote: "只陈述可观测的行为，不做情绪判断。",
     timeline: "记忆时间轴",
     timelineNote: "点上面的偏好标签可以定位到对应记录",
+    emptyMemories: "T3 还没有长期偏好。Path A 不产出偏好，需要 MCP 客户端写入或等 M2 抽取。",
     stale: "已被取代",
     open: "valid_at 未关闭",
     underneath: "看底层",
     underneathMeta: "T1 / T2 / T3 原始状态",
     t1: "T1 会话缓冲区 — 卡片依据的原始轮次",
-    t2: "T2 滚动摘要 — 抽取出的结构化事实",
-    t3: "T3 pgvector — 这一天之后的长期记忆",
+    t2: "T2 滚动摘要 — 存进数据库的结构化事实",
+    t3: "T3 pgvector — 截至这一天的长期记忆",
+    t1More: (shown: number, total: number) =>
+      `显示 ${shown} / ${total} 轮（其余略去）`,
+    batch: "当天统计",
+    batchTurns: "T1 现存轮次（当日）",
+    batchFacts: "卡片里的结构化事实",
+    batchMemories: "截至当日的 T3 记忆",
     source: "源码",
+    factsNote: "事实文本由后端逐字返回，未翻译。",
   },
   en: {
     back: "Back to home",
-    eyebrow: "Diary · sample data",
+    eyebrowLive: "Diary · live data",
+    eyebrowSample: "Diary · sample data",
+    eyebrowLoading: "Diary · loading",
     title: "MindBridge memory diary",
     lede: "One card a day, written from that day's AI conversations. Nothing for you to do — and you can always open it up to see which raw records it came from.",
-    banner:
-      "Fixed sample data, here to show the interface. It calls no model, reads none of your transcripts, and touches no database; the log parser and MCP server are still being built.",
+    liveBanner: (cards: number, turns: number, memories: number) =>
+      `Live data: ${cards} day card(s) written by Path A from transcripts on this machine, ${turns} turns in T1 and ${memories} long-term preference(s) in T3. Card contents are rule-based counts, not model-written prose — narration and preference extraction wait for M2.`,
+    offlineBanner: (base: string) =>
+      `Backend unreachable at ${base}, so this is fixed sample data. Run docker compose up -d api locally and reload to see the real cards.`,
+    loadingBanner: "Reading the backend…",
     book: "Book a real walkthrough",
     dayTitle: "Day",
-    cardMeta: "auto-generated",
+    cardMetaLive: "written by Path A",
+    cardMetaSample: "sample",
     items: "What happened",
-    wrote: "Preferences written",
-    noWrote: "No new preference written today.",
+    wrote: "Preferences written that day",
+    noWrote:
+      "No preference written that day — those arrive when an MCP client calls upsert_preference. Path A only computes facts.",
     behaviour: "Behavioural note",
     behaviourNote: "Observable behaviour only — no emotional inference.",
     timeline: "Memory timeline",
     timelineNote: "Tap a preference above to locate its record",
+    emptyMemories:
+      "T3 holds no long-term preferences yet. Path A does not produce them; they need an MCP client write, or M2 extraction.",
     stale: "superseded",
     open: "valid_at open",
     underneath: "Look underneath",
     underneathMeta: "raw T1 / T2 / T3 state",
     t1: "T1 session buffer — the raw turns behind this card",
-    t2: "T2 rolling summary — extracted structured facts",
+    t2: "T2 rolling summary — the structured facts as stored",
     t3: "T3 pgvector — long-term memory as of this day",
+    t1More: (shown: number, total: number) =>
+      `showing ${shown} of ${total} turns`,
+    batch: "That day",
+    batchTurns: "turns now in T1 (that day)",
+    batchFacts: "structured facts on the card",
+    batchMemories: "T3 memories as of that day",
     source: "Source",
+    factsNote: "Fact text is returned verbatim by the backend, untranslated.",
   },
 };
 
+/** Local calendar date of an ISO timestamp, matching the day-card boundary. */
+function localDate(iso: string): string {
+  const date = new Date(iso);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function weekday(date: string, locale: Locale): string {
+  const parsed = new Date(`${date}T12:00:00`);
+  return parsed.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
+    weekday: "short",
+  });
+}
+
 export function MemoryConsole() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
-  const [dayIndex, setDayIndex] = useState(0);
-  const [activeMemory, setActiveMemory] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("loading");
+  const [apiBase, setApiBase] = useState("");
+  const [cards, setCards] = useState<DiaryCard[]>([]);
+  const [memories, setMemories] = useState<DiaryMemory[]>([]);
+  const [turns, setTurns] = useState<DiaryTurn[]>([]);
+  const [turnsTotal, setTurnsTotal] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [sampleIndex, setSampleIndex] = useState(0);
+  const [activeMemory, setActiveMemory] = useState<number | string | null>(null);
   const t = copy[locale];
-  const day = days[dayIndex];
   const zh = locale === "zh";
 
-  // Only memories that already existed on the selected day belong on its card.
-  const visible = useMemo(
-    () => memories.filter((memory) => memory.createdAt <= day.date),
-    [day.date],
+  const fetchDiary = useCallback(
+    async (date: string | null): Promise<DiaryPayload> => {
+      // getTimezoneOffset() is what the backend needs to turn a local date into
+      // the matching UTC instant, so the day boundary is the browser's, not the
+      // server's.
+      const query = new URLSearchParams({
+        offset: String(new Date().getTimezoneOffset()),
+      });
+      if (date) query.set("date", date);
+      const response = await fetch(`/api/diary?${query}`, { cache: "no-store" });
+      return (await response.json()) as DiaryPayload;
+    },
+    [],
   );
-  const wrote = visible.filter((memory) => day.wrote.includes(memory.id));
+
+  const apply = useCallback((payload: DiaryPayload) => {
+    if (payload.source === "offline") {
+      setApiBase(payload.apiBase);
+      setMode("offline");
+      return;
+    }
+    setCards(payload.cards);
+    setMemories(payload.memories);
+    setTurns(payload.turns);
+    setTurnsTotal(payload.turnsTotal);
+    setSelected(payload.selected);
+    setMode("live");
+  }, []);
+
+  useEffect(() => {
+    // The flag keeps a slow response from writing state after unmount, which
+    // matters here because switching day refetches.
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = await fetchDiary(null);
+        if (!cancelled) apply(payload);
+      } catch {
+        if (!cancelled) setMode("offline");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apply, fetchDiary]);
+
+  const selectDay = useCallback(
+    async (date: string) => {
+      try {
+        apply(await fetchDiary(date));
+      } catch {
+        setMode("offline");
+      }
+    },
+    [apply, fetchDiary],
+  );
+
+  const live = mode === "live";
+  const sampleDay: SampleDay = SAMPLE_DAYS[sampleIndex];
+  const card = live ? cards.find((entry) => entry.period === selected) : undefined;
+
+  // Memories created on the shown day, matched on the same local-date boundary
+  // the cards use.
+  const wroteThatDay = useMemo(() => {
+    if (!live || !selected) return [];
+    return memories.filter((memory) => localDate(memory.created_at) === selected);
+  }, [live, memories, selected]);
+
+  // The timeline should show memory as it stood on that day, so anything
+  // learned later is excluded rather than shown as if it already existed.
+  const visibleMemories = useMemo(() => {
+    if (!live) return [];
+    if (!selected) return memories;
+    return memories.filter((memory) => localDate(memory.created_at) <= selected);
+  }, [live, memories, selected]);
+
+  const dayList = live
+    ? cards.map((entry) => ({
+        key: entry.period,
+        date: entry.period,
+        label: entry.summary,
+      }))
+    : SAMPLE_DAYS.map((day, index) => ({
+        key: String(index),
+        date: day.date,
+        label: zh ? day.zhSummary : day.enSummary,
+      }));
+
+  const activeKey = live ? selected : String(sampleIndex);
 
   return (
     <main className="console-page" lang={zh ? "zh-CN" : "en"}>
@@ -291,7 +278,13 @@ export function MemoryConsole() {
       <div className="shell">
         <div className="console-head">
           <div>
-            <p className="eyebrow">{t.eyebrow}</p>
+            <p className="eyebrow">
+              {mode === "loading"
+                ? t.eyebrowLoading
+                : live
+                  ? t.eyebrowLive
+                  : t.eyebrowSample}
+            </p>
             <h1>{t.title}</h1>
             <p>{t.lede}</p>
           </div>
@@ -301,32 +294,49 @@ export function MemoryConsole() {
           </Link>
         </div>
 
-        <p className="console-banner">
-          <Warning weight="fill" />
-          {t.banner}
-        </p>
+        {live ? (
+          <p className="console-banner live">
+            <Database weight="fill" />
+            {t.liveBanner(
+              cards.length,
+              turnsTotal,
+              memories.filter((memory) => memory.valid_at === null).length,
+            )}
+          </p>
+        ) : (
+          <p className="console-banner">
+            <Warning weight="fill" />
+            {mode === "loading" ? t.loadingBanner : t.offlineBanner(apiBase)}
+          </p>
+        )}
 
         <div className="console-grid">
           <section className="panel">
             <div className="panel-head">
               <h2>{t.dayTitle}</h2>
+              <span>{live ? `${cards.length} cards` : "sample"}</span>
             </div>
             <div className="day-list">
-              {days.map((option, index) => (
+              {dayList.map((entry, index) => (
                 <button
                   type="button"
-                  key={option.date}
-                  className={index === dayIndex ? "selected" : ""}
-                  aria-pressed={index === dayIndex}
+                  key={entry.key}
+                  className={entry.key === activeKey ? "selected" : ""}
+                  aria-pressed={entry.key === activeKey}
                   onClick={() => {
-                    setDayIndex(index);
                     setActiveMemory(null);
+                    if (live) {
+                      setSelected(entry.date);
+                      void selectDay(entry.date);
+                    } else {
+                      setSampleIndex(index);
+                    }
                   }}
                 >
                   <strong>
-                    {option.date} · {zh ? option.weekdayZh : option.weekdayEn}
+                    {entry.date} · {weekday(entry.date, locale)}
                   </strong>
-                  <small>{zh ? option.zhSummary : option.enSummary}</small>
+                  <small>{entry.label}</small>
                 </button>
               ))}
             </div>
@@ -335,72 +345,125 @@ export function MemoryConsole() {
           <article className="card-lg">
             <p className="card-lg-head">
               <span>
-                {day.date} · {zh ? day.weekdayZh : day.weekdayEn}
+                {live ? selected : sampleDay.date} ·{" "}
+                {weekday(live ? (selected ?? "") : sampleDay.date, locale)}
               </span>
-              <span>{t.cardMeta}</span>
+              <span>{live ? t.cardMetaLive : t.cardMetaSample}</span>
             </p>
-            <h2>{zh ? day.zhSummary : day.enSummary}</h2>
+            <h2>
+              {live
+                ? (card?.summary ?? "—")
+                : zh
+                  ? sampleDay.zhSummary
+                  : sampleDay.enSummary}
+            </h2>
 
             <div className="card-section">
               <p>{t.items}</p>
               <ul className="card-list">
-                {(zh ? day.zhItems : day.enItems).map((item) => (
+                {(live
+                  ? (card?.developer_behavior_facts ?? [])
+                  : zh
+                    ? sampleDay.zhItems
+                    : sampleDay.enItems
+                ).map((item) => (
                   <li key={item}>
                     <Check weight="bold" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
+              {live && (
+                <small style={{ color: "#667085", fontSize: 11 }}>
+                  {t.factsNote}
+                </small>
+              )}
             </div>
 
             <div className="card-section">
               <p>{t.wrote}</p>
-              {wrote.length === 0 ? (
+              {live ? (
+                wroteThatDay.length === 0 ? (
+                  <small style={{ color: "#667085", fontSize: 12 }}>
+                    {t.noWrote}
+                  </small>
+                ) : (
+                  <div className="pills">
+                    {wroteThatDay.map((memory) => (
+                      <span
+                        key={memory.id}
+                        role="button"
+                        tabIndex={0}
+                        className={activeMemory === memory.id ? "active" : ""}
+                        onClick={() =>
+                          setActiveMemory(
+                            activeMemory === memory.id ? null : memory.id,
+                          )
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setActiveMemory(
+                              activeMemory === memory.id ? null : memory.id,
+                            );
+                          }
+                        }}
+                      >
+                        {memory.content}
+                      </span>
+                    ))}
+                  </div>
+                )
+              ) : sampleDay.wrote.length === 0 ? (
                 <small style={{ color: "#667085", fontSize: 12 }}>
                   {t.noWrote}
                 </small>
               ) : (
                 <div className="pills">
-                  {wrote.map((memory) => (
-                    <span
-                      key={memory.id}
-                      role="button"
-                      tabIndex={0}
-                      className={activeMemory === memory.id ? "active" : ""}
-                      onClick={() =>
-                        setActiveMemory(
-                          activeMemory === memory.id ? null : memory.id,
-                        )
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setActiveMemory(
-                            activeMemory === memory.id ? null : memory.id,
-                          );
+                  {sampleDay.wrote.map((id) => {
+                    const memory = SAMPLE_MEMORIES.find(
+                      (entry) => entry.id === id,
+                    );
+                    if (!memory) return null;
+                    return (
+                      <span
+                        key={id}
+                        role="button"
+                        tabIndex={0}
+                        className={activeMemory === id ? "active" : ""}
+                        onClick={() =>
+                          setActiveMemory(activeMemory === id ? null : id)
                         }
-                      }}
-                    >
-                      {zh ? memory.zh : memory.en}
-                    </span>
-                  ))}
+                      >
+                        {zh ? memory.zh : memory.en}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            <div className="card-section">
-              <p>{t.behaviour}</p>
-              <div className="behaviour">
-                <p>{zh ? day.zhBehaviour : day.enBehaviour}</p>
-                <small>{day.behaviourMeta}</small>
+            {!live && (
+              <div className="card-section">
+                <p>{t.behaviour}</p>
+                <div className="behaviour">
+                  <p>{zh ? sampleDay.zhBehaviour : sampleDay.enBehaviour}</p>
+                  <small>{sampleDay.behaviourMeta}</small>
+                </div>
+                <small style={{ color: "#667085", fontSize: 11 }}>
+                  {t.behaviourNote}
+                </small>
               </div>
-              <small style={{ color: "#667085", fontSize: 11 }}>
-                {t.behaviourNote}
-              </small>
-            </div>
+            )}
 
             <p className="card-scribble">
-              {zh ? day.zhScribble : day.enScribble}
+              {live
+                ? zh
+                  ? "这一整张卡你自己没写一个字。"
+                  : "You wrote none of this card."
+                : zh
+                  ? sampleDay.zhScribble
+                  : sampleDay.enScribble}
             </p>
           </article>
 
@@ -408,35 +471,70 @@ export function MemoryConsole() {
             <section className="panel">
               <div className="panel-head">
                 <h2>{t.timeline}</h2>
-                <span>{day.sources}</span>
+                <span>
+                  {live
+                    ? `${visibleMemories.length} rows`
+                    : sampleDay.sources}
+                </span>
               </div>
               <div className="tier-card">
-                {visible.map((memory) => (
+                {live && visibleMemories.length === 0 && (
+                  <p className="empty">{t.emptyMemories}</p>
+                )}
+                {(live
+                  ? visibleMemories.map((memory) => ({
+                      id: memory.id as number | string,
+                      label: `m_${memory.id}`,
+                      text: memory.content,
+                      createdAt: localDate(memory.created_at),
+                      closed: memory.valid_at !== null,
+                      supersededBy:
+                        memory.superseded_by === null
+                          ? null
+                          : `m_${memory.superseded_by}`,
+                      weight: memory.decay_multiplier,
+                      fresh: localDate(memory.created_at) === selected,
+                    }))
+                  : SAMPLE_MEMORIES.filter(
+                      (memory) => memory.createdAt <= sampleDay.date,
+                    ).map((memory) => ({
+                      id: memory.id as number | string,
+                      label: memory.id,
+                      text: zh ? memory.zh : memory.en,
+                      createdAt: memory.createdAt,
+                      closed: memory.supersededBy !== undefined,
+                      supersededBy: memory.supersededBy ?? null,
+                      weight: memory.weight,
+                      fresh: sampleDay.wrote.includes(memory.id),
+                    }))
+                ).map((row) => (
                   <div
-                    className={`record ${
-                      activeMemory === memory.id ? "active" : ""
-                    } ${day.wrote.includes(memory.id) ? "fresh" : ""}`}
-                    key={memory.id}
+                    className={`record ${activeMemory === row.id ? "active" : ""} ${
+                      row.fresh ? "fresh" : ""
+                    }`}
+                    key={row.id}
                   >
                     <span>
-                      <b>{memory.id}</b> {zh ? memory.zh : memory.en}
+                      <b>{row.label}</b> {row.text}
                     </span>
                     <small>
-                      created_at {memory.createdAt} ·{" "}
-                      {memory.supersededBy
-                        ? `${t.stale} → ${memory.supersededBy}`
+                      created_at {row.createdAt} ·{" "}
+                      {row.closed
+                        ? `${t.stale}${row.supersededBy ? ` → ${row.supersededBy}` : ""}`
                         : t.open}
                     </small>
                     <span className="decay">
                       <span className="decay-bar">
-                        <i style={{ width: `${memory.weight * 100}%` }} />
+                        <i style={{ width: `${Math.max(2, row.weight * 100)}%` }} />
                       </span>
-                      <span>{memory.weight.toFixed(2)}</span>
+                      <span>{row.weight.toFixed(2)}</span>
                     </span>
                   </div>
                 ))}
               </div>
-              <p className="empty">{t.timelineNote}</p>
+              {(live ? visibleMemories.length > 0 : true) && (
+                <p className="empty">{t.timelineNote}</p>
+              )}
             </section>
 
             <details className="underneath">
@@ -449,22 +547,44 @@ export function MemoryConsole() {
                 <div className="tier-card">
                   <header>
                     <strong>{t.t1}</strong>
-                    <span>session_buffer</span>
+                    <span>session_turns</span>
                   </header>
-                  {day.turns.map((turn) => (
-                    <div className="record" key={turn.text}>
+                  {(live
+                    ? turns.map((turn) => ({
+                        key: String(turn.id),
+                        tool: turn.tool ?? turn.role,
+                        text: turn.content.slice(0, 220),
+                      }))
+                    : sampleDay.turns.map((turn) => ({
+                        key: turn.text,
+                        tool: turn.tool,
+                        text: turn.text,
+                      }))
+                  ).map((row) => (
+                    <div className="record" key={row.key}>
                       <span>
-                        <b>{turn.tool}</b> {turn.text}
+                        <b>{row.tool}</b> {row.text}
                       </span>
                     </div>
                   ))}
+                  {live && turnsTotal > turns.length && (
+                    <p className="empty">
+                      {t.t1More(turns.length, turnsTotal)}
+                    </p>
+                  )}
                 </div>
                 <div className="tier-card">
                   <header>
                     <strong>{t.t2}</strong>
-                    <span>rolling_summary</span>
+                    <span>
+                      rolling_summaries
+                      {live && card ? ` · ${card.token_count} tokens` : ""}
+                    </span>
                   </header>
-                  {day.facts.map((fact) => (
+                  {(live
+                    ? (card?.developer_behavior_facts ?? [])
+                    : sampleDay.facts
+                  ).map((fact) => (
                     <div className="record" key={fact}>
                       <span>{fact}</span>
                     </div>
@@ -473,49 +593,66 @@ export function MemoryConsole() {
                 <div className="tier-card">
                   <header>
                     <strong>{t.t3}</strong>
-                    <span>pgvector · {visible.length} rows</span>
+                    <span>
+                      pgvector ·{" "}
+                      {live ? visibleMemories.length : SAMPLE_MEMORIES.length} rows
+                    </span>
                   </header>
-                  {visible.map((memory) => (
-                    <div className="record" key={memory.id}>
-                      <span>
-                        <b>{memory.id}</b> {zh ? memory.zh : memory.en}
-                      </span>
-                      <small>
-                        weight {memory.weight.toFixed(2)}
-                        {memory.supersededBy
-                          ? ` · ${t.stale} → ${memory.supersededBy}`
-                          : ""}
-                      </small>
-                    </div>
-                  ))}
+                  {live
+                    ? visibleMemories.map((memory) => (
+                        <div className="record" key={memory.id}>
+                          <span>
+                            <b>m_{memory.id}</b> {memory.content}
+                          </span>
+                          <small>
+                            category {memory.category} · age{" "}
+                            {memory.age_days.toFixed(2)}d · weight{" "}
+                            {memory.decay_multiplier.toFixed(4)} · accessed{" "}
+                            {memory.access_count}×
+                          </small>
+                        </div>
+                      ))
+                    : SAMPLE_MEMORIES.map((memory) => (
+                        <div className="record" key={memory.id}>
+                          <span>
+                            <b>{memory.id}</b> {zh ? memory.zh : memory.en}
+                          </span>
+                        </div>
+                      ))}
                 </div>
               </div>
             </details>
 
             <section className="panel">
               <div className="panel-head">
-                <h2>{zh ? "夜间批处理" : "Nightly batch"}</h2>
-                <span>{zh ? "示例" : "sample"}</span>
+                <h2>{t.batch}</h2>
+                <span>{live ? "from postgres" : zh ? "示例" : "sample"}</span>
               </div>
               <div className="metrics">
                 <div className="metric">
-                  <strong>{day.turns.length}</strong>
-                  <small>{zh ? "解析的轮次" : "turns parsed"}</small>
+                  <strong>{live ? turnsTotal : sampleDay.turns.length}</strong>
+                  <small>{t.batchTurns}</small>
                 </div>
                 <div className="metric">
-                  <strong>{day.facts.length}</strong>
-                  <small>{zh ? "抽出的事实" : "facts extracted"}</small>
+                  <strong>
+                    {live
+                      ? (card?.developer_behavior_facts.length ?? 0)
+                      : sampleDay.facts.length}
+                  </strong>
+                  <small>{t.batchFacts}</small>
                 </div>
                 <div className="metric">
-                  <strong>{day.wrote.length}</strong>
-                  <small>{zh ? "写入的偏好" : "preferences written"}</small>
+                  <strong>
+                    {live ? visibleMemories.length : SAMPLE_MEMORIES.length}
+                  </strong>
+                  <small>{t.batchMemories}</small>
                 </div>
               </div>
               <p className="empty">
                 <Moon weight="fill" style={{ width: 12, height: 12 }} />{" "}
                 {zh
-                  ? "真实版本由每晚一次批处理生成。"
-                  : "The real version runs as one nightly batch."}
+                  ? "Path A 由 docker compose run --rm ingest 触发，尚未接定时任务。卡片里的轮次是当次解析的计数，这里是 T1 现在的行数 —— 后续再跑一次 ingest 两者就会有差。"
+                  : "Path A runs via docker compose run --rm ingest; no scheduler yet. The card's turn count is from the run that wrote it, while this is the current row count in T1 — a later ingest makes them differ."}
               </p>
             </section>
           </div>

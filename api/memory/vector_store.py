@@ -25,6 +25,7 @@ from ..models import (
     MemoryCategory,
     MemoryHit,
     MemoryRecord,
+    MemoryWithDecay,
     UpsertAction,
 )
 
@@ -207,6 +208,42 @@ class VectorMemoryStore:
         if hits:
             await self._record_access([hit.id for hit in hits])
         return hits
+
+    async def list_recent(
+        self,
+        *,
+        limit: int = 50,
+        include_superseded: bool = True,
+    ) -> list[MemoryWithDecay]:
+        """Newest-first listing for the diary timeline.
+
+        Unlike search() this does not bump access_count: rendering a timeline is
+        not the model recalling a memory, and conflating the two would inflate
+        the access statistics.
+        """
+        rows = await self._pool.fetch(
+            f"""
+            WITH aged AS (
+                SELECT {_RECORD_COLUMNS},
+                       EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0 AS age_days
+                FROM memory_vectors
+                WHERE ($2::boolean OR valid_at IS NULL)
+            )
+            SELECT *,
+                   exp(-$3::double precision * decay_factor * age_days)
+                     * CASE WHEN valid_at IS NULL
+                            THEN 1.0 ELSE $4::double precision END
+                     AS decay_multiplier
+            FROM aged
+            ORDER BY created_at DESC, id DESC
+            LIMIT $1
+            """,
+            limit,
+            include_superseded,
+            self._decay_rate,
+            self._superseded_penalty,
+        )
+        return [MemoryWithDecay(**dict(row)) for row in rows]
 
     async def _record_access(self, ids: list[int]) -> None:
         await self._pool.execute(

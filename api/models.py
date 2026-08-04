@@ -97,6 +97,18 @@ class MemoryRecord(BaseModel):
         return self.valid_at is None
 
 
+class MemoryWithDecay(MemoryRecord):
+    """A T3 row plus the decay weight it currently carries.
+
+    Listing has no query, so there is no cosine term and no score — only the
+    time component. Keeping them separate stops a timeline reading as if it
+    were a relevance ranking.
+    """
+
+    age_days: float
+    decay_multiplier: float
+
+
 class MemoryHit(MemoryRecord):
     """A T3 row with the scores that put it in the result set."""
 
