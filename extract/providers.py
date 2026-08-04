@@ -10,6 +10,9 @@ JSON and we validate it ourselves.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import shutil
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -138,6 +141,120 @@ class GeminiChatProvider:
         )
 
 
+def _claude_cli_messages(messages: list[Message]) -> tuple[str, str]:
+    """Split chat messages into Claude CLI's system prompt and stdin prompt."""
+    system = "\n\n".join(
+        message.content for message in messages if message.role == "system"
+    )
+    turns: list[str] = []
+    for message in messages:
+        if message.role == "system":
+            continue
+        if message.role not in {"user", "assistant"}:
+            raise ValueError(f"unsupported Claude CLI role: {message.role!r}")
+        turns.append(
+            f"<{message.role}>\n{message.content}\n</{message.role}>"
+        )
+    return system, "\n\n".join(turns)
+
+
+def _claude_cli_input_tokens(usage: dict[str, object]) -> int:
+    """Count uncached and cached prompt tokens on the same basis as other APIs."""
+    return sum(
+        int(usage.get(field) or 0)
+        for field in (
+            "input_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        )
+    )
+
+
+class ClaudeCodeCLIProvider:
+    """Use the signed-in Claude Code CLI without copying an API key.
+
+    Transcript excerpts are passed on stdin rather than the command line so
+    they do not appear in shell history or the process list. Tools and session
+    persistence are disabled: this adapter asks Claude for text only and keeps
+    MindBridge's own validation/repair loop as the source of truth.
+    """
+
+    name = "claude-cli"
+
+    def __init__(
+        self,
+        model: str = "sonnet",
+        timeout: float = 180.0,
+        executable: str = "claude",
+    ) -> None:
+        resolved = shutil.which(executable)
+        if resolved is None:
+            raise ValueError(
+                "Claude Code CLI was not found. Install it and run `claude` once "
+                "to sign in."
+            )
+        self.model = model
+        self._executable = resolved
+        self._timeout = timeout
+
+    async def complete(self, messages: list[Message]) -> Completion:
+        system, prompt = _claude_cli_messages(messages)
+        command = [
+            self._executable,
+            "-p",
+            "--no-session-persistence",
+            "--safe-mode",
+            "--tools",
+            "",
+            "--output-format",
+            "json",
+            "--model",
+            self.model,
+        ]
+        if system:
+            command.extend(["--system-prompt", system])
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(prompt.encode("utf-8")), timeout=self._timeout
+            )
+        except TimeoutError:
+            process.kill()
+            await process.wait()
+            raise RuntimeError(
+                f"Claude Code CLI timed out after {self._timeout:.0f}s"
+            ) from None
+
+        if process.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace").strip()[:500]
+            raise RuntimeError(
+                f"Claude Code CLI exited {process.returncode}"
+                + (f": {detail}" if detail else "")
+            )
+
+        try:
+            payload = json.loads(stdout)
+        except json.JSONDecodeError:
+            raise RuntimeError("Claude Code CLI returned an invalid JSON envelope") from None
+
+        result = payload.get("result")
+        if payload.get("is_error") or not isinstance(result, str):
+            raise RuntimeError("Claude Code CLI did not return a text result")
+
+        usage = payload.get("usage") or {}
+        return Completion(
+            text=result,
+            input_tokens=_claude_cli_input_tokens(usage),
+            output_tokens=usage.get("output_tokens", 0),
+        )
+
+
 @dataclass
 class ScriptedProvider:
     """Returns canned replies in order. Used to test the repair loop offline.
@@ -166,4 +283,8 @@ def build_provider(
         return OpenAIChatProvider(api_key or "", model or "gpt-4o-mini")
     if kind == "gemini":
         return GeminiChatProvider(api_key or "", model or "gemini-2.5-flash")
-    raise ValueError(f"unknown provider {kind!r}; use openai or gemini")
+    if kind == "claude-cli":
+        return ClaudeCodeCLIProvider(model or "sonnet")
+    raise ValueError(
+        f"unknown provider {kind!r}; use openai, gemini, or claude-cli"
+    )

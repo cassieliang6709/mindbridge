@@ -183,8 +183,10 @@ An incremental run takes about seven seconds on an already-ingested corpus.
 
 ## M2 — turning a day into a diary
 
-Stage one uses a hosted API. Stage two replaces it with a fine-tuned model
-running locally; the code is written, the fine-tune is not run.
+Stage one uses a hosted provider. It can call OpenAI/Gemini with an API key, or
+reuse an existing Claude Code sign-in without copying a key into MindBridge.
+Stage two replaces it with a fine-tuned model running locally; the code is
+written, the fine-tune is not run.
 
 ```bash
 # see the exact prompt and what it would cost — no key needed, sends nothing
@@ -193,6 +195,11 @@ docker compose run --rm extract --date 2026-08-04 --dry-run
 # actually extract (requires a key AND the explicit send flag)
 export MINDBRIDGE_OPENAI_API_KEY=...      # or MINDBRIDGE_GEMINI_API_KEY
 docker compose run --rm extract --missing --limit 5 --send-to-provider
+
+# or reuse the signed-in host Claude Code CLI — no API key
+# (run on the host because the Docker image intentionally has no CLI credentials)
+uv run --with-requirements requirements.txt python -m extract.runner \
+    --date 2026-08-04 --provider claude-cli --send-to-provider
 
 # cumulative schema-compliance figures
 docker compose run --rm extract --stats

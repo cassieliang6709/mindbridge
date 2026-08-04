@@ -14,7 +14,12 @@ import json
 
 from .pipeline import extract_day, training_pair
 from .prompts import build_day_input
-from .providers import ScriptedProvider
+from .providers import (
+    Message,
+    ScriptedProvider,
+    _claude_cli_input_tokens,
+    _claude_cli_messages,
+)
 from .schemas import DiaryDraft
 
 VALID = {
@@ -88,6 +93,30 @@ async def main() -> int:
         ok &= check("transient task rejected as preference", True)
 
     ok &= check("valid draft accepted", DiaryDraft.model_validate(VALID) is not None)
+
+    print("\nClaude CLI adapter")
+    system, prompt = _claude_cli_messages(
+        [
+            Message("system", "return JSON"),
+            Message("user", "first request"),
+            Message("assistant", "bad reply"),
+            Message("user", "repair it"),
+        ]
+    )
+    ok &= check("system prompt stays separate", system == "return JSON")
+    ok &= check("stdin preserves repair turns", prompt.count("<user>") == 2)
+    ok &= check("stdin preserves assistant reply", "<assistant>" in prompt)
+    ok &= check(
+        "cached prompt tokens count toward input",
+        _claude_cli_input_tokens(
+            {
+                "input_tokens": 2,
+                "cache_creation_input_tokens": 100,
+                "cache_read_input_tokens": 900,
+            }
+        )
+        == 1002,
+    )
 
     print("\nrepair loop")
 

@@ -3,8 +3,9 @@
     # show the exact prompt and what it would cost, call nothing
     python -m extract.runner --date 2026-08-04 --dry-run
 
-    # extract one day, write the card and the preferences
-    python -m extract.runner --date 2026-08-04
+    # extract with the signed-in Claude Code CLI (no API key)
+    python -m extract.runner --date 2026-08-04 --provider claude-cli \
+        --send-to-provider
 
     # every card that has no narrative yet, newest first
     python -m extract.runner --missing --limit 5
@@ -12,9 +13,8 @@
     # compliance over everything extracted so far
     python -m extract.runner --stats
 
-The provider key is read from the environment and never passed on the command
-line, so it cannot end up in shell history:
-MINDBRIDGE_OPENAI_API_KEY or MINDBRIDGE_GEMINI_API_KEY.
+OpenAI/Gemini keys are read from the environment and never passed on the command
+line. The claude-cli provider instead uses Claude Code's existing sign-in.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ async def run(args: argparse.Namespace) -> int:
                 print(
                     "REFUSING TO SEND.\n\n"
                     f"Extraction would send excerpts of your transcripts to the "
-                    f"{args.provider} API. Everything else in MindBridge stays "
+                    f"{args.provider} hosted provider. Everything else in MindBridge stays "
                     "local; this step does not.\n\n"
                     "Inspect exactly what would be sent:\n"
                     "    --dry-run\n\n"
@@ -112,12 +112,13 @@ async def run(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
                 return 4
-            key = (
-                settings.openai_api_key
-                if args.provider == "openai"
-                else settings.gemini_api_key
-            )
-            if not key:
+            key = None
+            if args.provider == "openai":
+                key = settings.openai_api_key
+            elif args.provider == "gemini":
+                key = settings.gemini_api_key
+
+            if args.provider in {"openai", "gemini"} and not key:
                 env = (
                     "MINDBRIDGE_OPENAI_API_KEY"
                     if args.provider == "openai"
@@ -132,9 +133,12 @@ async def run(args: argparse.Namespace) -> int:
                 return 3
             provider = build_provider(args.provider, key, args.model)
 
-        model_name = args.model or (
-            "gpt-4o-mini" if args.provider == "openai" else "gemini-2.5-flash"
-        )
+        default_models = {
+            "openai": "gpt-4o-mini",
+            "gemini": "gemini-2.5-flash",
+            "claude-cli": "sonnet",
+        }
+        model_name = args.model or default_models[args.provider]
         estimated_input = 0
         results: list[ExtractionResult] = []
 
@@ -250,7 +254,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--limit", type=int, default=3)
     parser.add_argument(
-        "--provider", choices=["openai", "gemini"], default="openai"
+        "--provider",
+        choices=["openai", "gemini", "claude-cli"],
+        default="openai",
     )
     parser.add_argument("--model", default=None)
     parser.add_argument(
@@ -262,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--send-to-provider",
         action="store_true",
         help=(
-            "Required to actually call the hosted API. Transcript excerpts "
+            "Required to actually call a hosted provider. Transcript excerpts "
             "leave your machine when you pass this."
         ),
     )
