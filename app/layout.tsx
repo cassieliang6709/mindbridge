@@ -1,22 +1,40 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, DM_Sans } from "next/font/google";
+import {
+  DM_Sans,
+  JetBrains_Mono,
+  Manrope,
+  Nanum_Pen_Script,
+} from "next/font/google";
 import "./globals.css";
-
-const display = Cormorant_Garamond({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600"],
-});
 
 const body = DM_Sans({
   variable: "--font-body",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const display = Manrope({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+});
+
+const accent = Nanum_Pen_Script({
+  variable: "--font-accent",
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const mono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "MindBridge — Reflective AI Companion",
+  title: "MindBridge — your AI conversations, written up as daily memory",
   description:
-    "A privacy-conscious product concept for reflective conversations, emotional patterns, and gentle next steps.",
+    "MindBridge parses the transcripts your local AI coding tools already write, turns each day into one memory card, and serves the same three-tier store to any MCP client. Nothing leaves your machine.",
 };
 
 export default function RootLayout({
@@ -25,8 +43,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${display.variable} ${body.variable}`}>{children}</body>
+    <html lang="zh-CN">
+      <body
+        className={`${body.variable} ${display.variable} ${accent.variable} ${mono.variable}`}
+      >
+        {children}
+      </body>
     </html>
   );
 }

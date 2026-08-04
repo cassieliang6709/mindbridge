@@ -1,0 +1,11 @@
+{
+  "_comment": "Written by the scripts in evals/. Every value here must come from a reproducible run; leave it null until the run exists. The landing page renders null as PENDING rather than inventing a number.",
+  "generatedAt": null,
+  "commit": null,
+  "metrics": {
+    "extractionJsonAccuracy": null,
+    "localExtractionCostDelta": null,
+    "promptTokenReduction": null,
+    "cacheCostSaving": null
+  }
+}
