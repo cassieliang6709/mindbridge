@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api ./api
 COPY mcp_server ./mcp_server
 COPY ingest ./ingest
+COPY extract ./extract
 COPY evals ./evals
 
 EXPOSE 8000

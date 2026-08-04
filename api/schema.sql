@@ -45,6 +45,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS rolling_summaries_global_period_key
     ON rolling_summaries (period)
     WHERE session_id IS NULL;
 
+-- M2 extraction output. `summary` stays the deterministic rule-based headline;
+-- `narrative` is model-written prose. Keeping both means the card can always
+-- fall back to the reproducible version, and `generated_by` records which one
+-- the UI is showing — a model-written card must never be indistinguishable
+-- from a computed one.
+ALTER TABLE rolling_summaries
+    ADD COLUMN IF NOT EXISTS narrative     TEXT,
+    ADD COLUMN IF NOT EXISTS open_threads  JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS generated_by  TEXT NOT NULL DEFAULT 'rule',
+    ADD COLUMN IF NOT EXISTS model         TEXT,
+    ADD COLUMN IF NOT EXISTS extracted_at  TIMESTAMPTZ;
+
 -- --- T3: long-term vector memory ---------------------------------------
 -- valid_at is the bitemporal half of the design: created_at says when we
 -- learned the fact, valid_at says when it stopped being true. Superseding a

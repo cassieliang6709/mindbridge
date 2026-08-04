@@ -98,6 +98,34 @@ services:
   #   docker compose run --rm ingest              # dry run, writes nothing
   #   docker compose run --rm ingest --since 7d --no-summaries
   #   docker compose run --rm ingest --full       # re-read everything
+  # M2 stage one. Reads the provider key from your shell or .env; it is never
+  # baked into the image or passed on a command line.
+  #
+  #   docker compose run --rm extract --date 2026-08-04 --dry-run
+  #   docker compose run --rm extract --missing --limit 3
+  extract:
+    build: .
+    profiles: ["tools"]
+    entrypoint: ["python", "-m", "extract.runner"]
+    command: ["--stats"]
+    environment:
+      MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
+      MINDBRIDGE_REDIS_URL: redis://redis:6379/0
+      MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
+      MINDBRIDGE_GEMINI_API_KEY: ${MINDBRIDGE_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}
+    volumes:
+      - ./api:/app/api
+      - ./ingest:/app/ingest
+      - ./extract:/app/extract
+      - ./train:/app/train
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   ingest:
     build: .
     profiles: ["tools"]

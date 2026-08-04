@@ -45,14 +45,21 @@ const copy = {
     eyebrowLoading: "日记界面 · 读取中",
     title: "MindBridge 记忆日记",
     lede: "每天一张卡，由当天的 AI 对话自动写成。你不用动手，也可以随时展开看它是从哪几条原始记录来的。",
-    liveBanner: (cards: number, turns: number, memories: number) =>
-      `真实数据：${cards} 张日记卡由 Path A 从本机 transcript 解析生成，T1 有 ${turns} 轮记录、T3 有 ${memories} 条长期偏好。卡片内容是规则算出来的计数，不是模型写的散文 —— 叙述与偏好抽取要等 M2。`,
+    liveBanner: (cards: number, turns: number, memories: number, prose: number) =>
+      `真实数据：${cards} 张日记卡由 Path A 从本机 transcript 解析生成，T1 有 ${turns} 轮记录、T3 有 ${memories} 条长期偏好。` +
+      (prose > 0
+        ? `其中 ${prose} 张已由 M2 写成散文（卡片上标了模型名，规则计数仍保留在下方）；其余是规则计数。`
+        : "卡片内容是规则算出来的计数，不是模型写的散文 —— 叙述与偏好抽取要等 M2。"),
     offlineBanner: (base: string) =>
       `连不上后端（${base}），下面显示的是固定示例数据。本机跑 docker compose up -d api 之后刷新即可看到真实卡片。`,
     loadingBanner: "正在读取后端…",
     book: "预约真机演示",
     dayTitle: "日期",
-    cardMetaLive: "Path A 生成",
+    cardMetaRule: "Path A 计数",
+    cardMetaModel: (model: string) => `${model} 撰写`,
+    ruleBadge: "规则计数 · 可复现",
+    modelBadge: "模型撰写 · 已过 schema 校验",
+    threads: "还没做完的",
     cardMetaSample: "示例",
     items: "今天发生了什么",
     wrote: "当天写入的偏好",
@@ -85,14 +92,21 @@ const copy = {
     eyebrowLoading: "Diary · loading",
     title: "MindBridge memory diary",
     lede: "One card a day, written from that day's AI conversations. Nothing for you to do — and you can always open it up to see which raw records it came from.",
-    liveBanner: (cards: number, turns: number, memories: number) =>
-      `Live data: ${cards} day card(s) written by Path A from transcripts on this machine, ${turns} turns in T1 and ${memories} long-term preference(s) in T3. Card contents are rule-based counts, not model-written prose — narration and preference extraction wait for M2.`,
+    liveBanner: (cards: number, turns: number, memories: number, prose: number) =>
+      `Live data: ${cards} day card(s) written by Path A from transcripts on this machine, ${turns} turns in T1 and ${memories} long-term preference(s) in T3. ` +
+      (prose > 0
+        ? `${prose} of them have M2 prose (the card names the model, and the rule-based count stays below it); the rest are counts.`
+        : "Card contents are rule-based counts, not model-written prose — narration and preference extraction wait for M2."),
     offlineBanner: (base: string) =>
       `Backend unreachable at ${base}, so this is fixed sample data. Run docker compose up -d api locally and reload to see the real cards.`,
     loadingBanner: "Reading the backend…",
     book: "Book a real walkthrough",
     dayTitle: "Day",
-    cardMetaLive: "written by Path A",
+    cardMetaRule: "counted by Path A",
+    cardMetaModel: (model: string) => `written by ${model}`,
+    ruleBadge: "rule-based counts · reproducible",
+    modelBadge: "model-written · schema-validated",
+    threads: "Still open",
     cardMetaSample: "sample",
     items: "What happened",
     wrote: "Preferences written that day",
@@ -301,6 +315,9 @@ export function MemoryConsole() {
               cards.length,
               turnsTotal,
               memories.filter((memory) => memory.valid_at === null).length,
+              cards.filter(
+                (entry) => entry.narrative && entry.generated_by !== "rule",
+              ).length,
             )}
           </p>
         ) : (
@@ -348,15 +365,35 @@ export function MemoryConsole() {
                 {live ? selected : sampleDay.date} ·{" "}
                 {weekday(live ? (selected ?? "") : sampleDay.date, locale)}
               </span>
-              <span>{live ? t.cardMetaLive : t.cardMetaSample}</span>
+              <span>
+                {live
+                  ? card?.narrative && card.generated_by !== "rule"
+                    ? t.cardMetaModel(card.model ?? card.generated_by)
+                    : t.cardMetaRule
+                  : t.cardMetaSample}
+              </span>
             </p>
             <h2>
               {live
-                ? (card?.summary ?? "—")
+                ? (card?.narrative ?? card?.summary ?? "—")
                 : zh
                   ? sampleDay.zhSummary
                   : sampleDay.enSummary}
             </h2>
+            {live && card && (
+              <p
+                className={`provenance ${
+                  card.narrative && card.generated_by !== "rule" ? "model" : "rule"
+                }`}
+              >
+                {card.narrative && card.generated_by !== "rule"
+                  ? t.modelBadge
+                  : t.ruleBadge}
+              </p>
+            )}
+            {live && card?.narrative && (
+              <p className="rule-headline">{card.summary}</p>
+            )}
 
             <div className="card-section">
               <p>{t.items}</p>
@@ -379,6 +416,20 @@ export function MemoryConsole() {
                 </small>
               )}
             </div>
+
+            {live && card && card.open_threads.length > 0 && (
+              <div className="card-section">
+                <p>{t.threads}</p>
+                <ul className="card-list">
+                  {card.open_threads.map((thread) => (
+                    <li key={thread}>
+                      <CaretRight weight="bold" />
+                      <span>{thread}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="card-section">
               <p>{t.wrote}</p>

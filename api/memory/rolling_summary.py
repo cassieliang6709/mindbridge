@@ -6,16 +6,23 @@ import json
 
 import asyncpg
 
-from ..models import SummaryCard, SummaryCardCreate
+from ..models import NarrativeUpdate, SummaryCard, SummaryCardCreate
 from .tokens import count_tokens
+
+_CARD_COLUMNS = """
+    id, session_id, period, summary, developer_behavior_facts, token_count,
+    created_at, updated_at, narrative, open_threads, generated_by, model,
+    extracted_at
+"""
 
 
 def _row_to_card(row: asyncpg.Record) -> SummaryCard:
     data = dict(row)
-    facts = data.get("developer_behavior_facts")
     # asyncpg returns jsonb as a string unless a codec is registered.
-    if isinstance(facts, str):
-        data["developer_behavior_facts"] = json.loads(facts)
+    for key in ("developer_behavior_facts", "open_threads"):
+        value = data.get(key)
+        if isinstance(value, str):
+            data[key] = json.loads(value)
     return SummaryCard(**data)
 
 
@@ -44,8 +51,7 @@ class RollingSummaryStore:
                 developer_behavior_facts = EXCLUDED.developer_behavior_facts,
                 token_count = EXCLUDED.token_count,
                 updated_at = now()
-            RETURNING id, session_id, period, summary, developer_behavior_facts,
-                      token_count, created_at, updated_at
+            RETURNING {_CARD_COLUMNS}
             """,
             card.session_id,
             card.period,
@@ -62,9 +68,8 @@ class RollingSummaryStore:
         limit: int = 30,
     ) -> list[SummaryCard]:
         rows = await self._pool.fetch(
-            """
-            SELECT id, session_id, period, summary, developer_behavior_facts,
-                   token_count, created_at, updated_at
+            f"""
+            SELECT {_CARD_COLUMNS}
             FROM rolling_summaries
             WHERE ($1::text IS NULL OR session_id = $1)
             ORDER BY period DESC
@@ -77,14 +82,47 @@ class RollingSummaryStore:
 
     async def get(self, period: str, session_id: str | None = None) -> SummaryCard | None:
         row = await self._pool.fetchrow(
-            """
-            SELECT id, session_id, period, summary, developer_behavior_facts,
-                   token_count, created_at, updated_at
+            f"""
+            SELECT {_CARD_COLUMNS}
             FROM rolling_summaries
             WHERE period = $1
               AND (($2::text IS NULL AND session_id IS NULL) OR session_id = $2)
             """,
             period,
             session_id,
+        )
+        return _row_to_card(row) if row is not None else None
+
+    async def set_narrative(self, update: NarrativeUpdate) -> SummaryCard | None:
+        """Layer M2 prose onto an existing card.
+
+        The rule-based `summary` is left untouched. If extraction is later found
+        to be wrong, or the model is swapped, the reproducible headline is still
+        there — and `generated_by` tells the UI which of the two it is showing.
+        """
+        facts = json.dumps(update.highlights, ensure_ascii=False)
+        threads = json.dumps(update.open_threads, ensure_ascii=False)
+        row = await self._pool.fetchrow(
+            f"""
+            UPDATE rolling_summaries
+            SET narrative = $2,
+                developer_behavior_facts = CASE
+                    WHEN jsonb_array_length($3::jsonb) > 0
+                    THEN $3::jsonb ELSE developer_behavior_facts
+                END,
+                open_threads = $4::jsonb,
+                generated_by = $5,
+                model = $6,
+                extracted_at = now(),
+                updated_at = now()
+            WHERE period = $1 AND session_id IS NULL
+            RETURNING {_CARD_COLUMNS}
+            """,
+            update.period,
+            update.narrative,
+            facts,
+            threads,
+            update.generated_by,
+            update.model,
         )
         return _row_to_card(row) if row is not None else None

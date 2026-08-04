@@ -64,6 +64,16 @@ class SummaryCard(BaseModel):
     token_count: int
     created_at: datetime
     updated_at: datetime
+    narrative: str | None = Field(
+        default=None, description="Model-written prose, when M2 has run."
+    )
+    open_threads: list[str] = Field(default_factory=list)
+    generated_by: str = Field(
+        default="rule",
+        description="'rule' for the computed card, else the model id that wrote it.",
+    )
+    model: str | None = None
+    extracted_at: datetime | None = None
 
 
 class SummaryCardCreate(BaseModel):
@@ -71,6 +81,17 @@ class SummaryCardCreate(BaseModel):
     summary: str = Field(min_length=1)
     developer_behavior_facts: list[str] = Field(default_factory=list)
     session_id: str | None = None
+
+
+class NarrativeUpdate(BaseModel):
+    """M2 output layered onto an existing rule-based card."""
+
+    period: str
+    narrative: str = Field(min_length=1)
+    highlights: list[str] = Field(default_factory=list)
+    open_threads: list[str] = Field(default_factory=list)
+    generated_by: str = Field(min_length=1)
+    model: str
 
 
 class MemoryRecord(BaseModel):

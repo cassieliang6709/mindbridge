@@ -181,6 +181,56 @@ run resumes exactly where this one would have. Logs land in
 
 An incremental run takes about seven seconds on an already-ingested corpus.
 
+## M2 — turning a day into a diary
+
+Stage one uses a hosted API. Stage two replaces it with a fine-tuned model
+running locally; the code is written, the fine-tune is not run.
+
+```bash
+# see the exact prompt and what it would cost — no key needed, sends nothing
+docker compose run --rm extract --date 2026-08-04 --dry-run
+
+# actually extract (requires a key AND the explicit send flag)
+export MINDBRIDGE_OPENAI_API_KEY=...      # or MINDBRIDGE_GEMINI_API_KEY
+docker compose run --rm extract --missing --limit 5 --send-to-provider
+
+# cumulative schema-compliance figures
+docker compose run --rm extract --stats
+
+# offline tests of the schema and repair loop — no key, no network
+docker compose run --rm --no-deps --entrypoint python extract \
+    -m extract.test_pipeline
+```
+
+**This step sends data off the machine.** Path A and Path B are local; hosted
+extraction is not. It transmits that day's transcript excerpts, so it is gated
+behind `--send-to-provider` and refuses to run without it. `--dry-run` prints
+byte-for-byte what would be sent. Stage two removes the exposure by serving the
+tuned model locally.
+
+Compliance is reported two ways and the difference matters: `first_attempt_rate`
+is how often the model returned a schema-valid object *without* correction, and
+`eventual_rate` includes the repair loop. Only the first is comparable to the
+tuned model, so only the first is the number to quote.
+
+Validation is not decorative. `DiaryDraft` forbids extra keys, rejects any
+narrative that infers an emotional state ("you seemed frustrated"), and rejects
+a one-off task masquerading as a durable preference — a model drifts into all
+three, and a prompt alone does not stop it.
+
+### Stage two
+
+```bash
+python -m train.prepare_dataset --report      # readiness and the split
+python -m train.train_qlora --epochs 2        # on a rented CUDA GPU, not a Mac
+python -m train.eval_holdout --model ... --write-results
+```
+
+The split is by date and deterministic, so a day's pairs never straddle
+train/holdout. `eval_holdout.py` refuses to publish a compliance rate computed
+on fewer than 30 holdout days, because a rate over a handful of days has an
+error bar wider than the number and it would land on a public page.
+
 ## Metrics policy
 
 The landing page reads `evals/results.json` and renders any `null` as an amber

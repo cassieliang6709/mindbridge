@@ -1245,6 +1245,42 @@ h3 {
   height: 15px;
 }
 
+/* Provenance sits directly under the headline, because a model-written card and
+   a computed one must never look alike. Amber for model prose (same language as
+   the "in progress" metrics), grey for reproducible counts. */
+.provenance {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.provenance.rule {
+  border: 1px solid rgba(16, 24, 40, 0.2);
+  color: #667085;
+}
+
+.provenance.model {
+  border: 1px dashed #b4791a;
+  background: rgba(214, 158, 46, 0.12);
+  color: #8a5a0d;
+}
+
+/* When prose is shown, the reproducible headline stays visible beneath it. */
+.rule-headline {
+  margin: 0;
+  color: #667085;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .card-section {
   display: grid;
   gap: 8px;

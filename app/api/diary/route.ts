@@ -33,6 +33,12 @@ export type DiaryCard = {
   developer_behavior_facts: string[];
   token_count: number;
   updated_at: string;
+  /** Model prose, present only once M2 has run for that day. */
+  narrative: string | null;
+  open_threads: string[];
+  /** "rule" for the computed card, otherwise "provider:model". */
+  generated_by: string;
+  model: string | null;
 };
 
 export type DiaryMemory = {

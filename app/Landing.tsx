@@ -16,6 +16,7 @@ import {
   PlugsConnected,
   ShieldCheck,
   Sparkle,
+  Warning,
 } from "@phosphor-icons/react";
 import rawResults from "../evals/results.json";
 import {
@@ -105,15 +106,17 @@ const benchRows: {
     en: "Preference-extraction JSON validity",
     zhHow: (
       <>
-        微调后的 Qwen2.5-7B 在 holdout 集上，输出能通过 schema 校验的比例。
-        脚本待建（M2 抽取层还没开始）。
+        微调后的 Qwen2.5-7B 在 holdout 集上、首次回复即通过 schema 校验的比例
+        （重试不计入）。脚本已就绪：<code>train/eval_holdout.py</code>，等微调模型
+        和足够的 holdout 天数。
       </>
     ),
     enHow: (
       <>
-        Share of outputs from the fine-tuned Qwen2.5-7B that pass schema
-        validation on a holdout set. Script not written yet — M2 extraction has
-        not started.
+        Share of holdout days where the fine-tuned Qwen2.5-7B passes schema
+        validation on its FIRST reply; repairs excluded. Script ready:{" "}
+        <code>train/eval_holdout.py</code>, pending the tuned model and enough
+        holdout days.
       </>
     ),
   },
@@ -123,13 +126,15 @@ const benchRows: {
     en: "Extraction API cost delta",
     zhHow: (
       <>
-        同一批对话，走托管 API 与走本地 vLLM 的成本对比。脚本待建（M2）。
+        同一批 holdout 对话，走托管 API 与走本地 vLLM（按 GPU 租用时长折算）
+        的成本对比。脚本已就绪：<code>train/eval_holdout.py</code>。
       </>
     ),
     enHow: (
       <>
-        The same batch of dialogues priced through a hosted API versus the local
-        vLLM instance. Script not written yet — M2.
+        The same holdout days priced through a hosted API versus local vLLM,
+        charging the local side for GPU rental time. Script ready:{" "}
+        <code>train/eval_holdout.py</code>.
       </>
     ),
   },
@@ -247,7 +252,9 @@ const copy = {
       ["跨客户端召回", "在 Claude 里说过的习惯，Cursor 里立刻生效。", PlugsConnected],
     ] as [string, string, typeof Book][],
     localNote:
-      "读的是你自己机器上的 transcript，存的是本地 Postgres —— 全程不出本机。",
+      "解析与存储都在本机：读你自己机器上的 transcript，写本地 Postgres。",
+    extractorNote:
+      "例外要说清楚：把一天写成散文的那一步目前走托管 API，会把当天的对话摘录发出去，所以它是显式开关、默认关闭 —— 不开就只有本地算出来的计数。等微调模型跑在本地 vLLM 上，这一步才回到本机。",
     coverage:
       "覆盖范围说清楚：路径 A 只对有本地结构化日志的工具成立（Claude Code、Codex CLI）；路径 B 对任意 MCP 客户端成立。ChatGPT 与网页版 Claude 的历史没有 API，只能手动导出，不在自动范围内。",
     archTitle: "技术结构",
@@ -415,7 +422,9 @@ const copy = {
       ],
     ] as [string, string, typeof Book][],
     localNote:
-      "It reads transcripts on your machine and writes to a local Postgres — nothing leaves the box.",
+      "Parsing and storage are local: it reads transcripts on your machine and writes to a local Postgres.",
+    extractorNote:
+      "One exception, stated plainly: turning a day into prose currently calls a hosted API, which sends that day's excerpts off the machine. It is an explicit opt-in and off by default — without it you get the locally computed counts. That step comes home once the tuned model runs on local vLLM.",
     coverage:
       "Stated plainly: Path A only works for tools that already write structured local logs (Claude Code, Codex CLI). Path B works with any MCP client. ChatGPT and web Claude expose no history API — those need a manual export and are out of scope for the automatic path.",
     archTitle: "Architecture",
@@ -830,6 +839,10 @@ export function Landing() {
         <p className="local-note" style={{ fontWeight: 400, color: "#a9bfdc" }}>
           <Laptop weight="bold" />
           {t.coverage}
+        </p>
+        <p className="local-note" style={{ fontWeight: 400, color: "#a9bfdc" }}>
+          <Warning weight="bold" />
+          {t.extractorNote}
         </p>
       </section>
 

@@ -53,3 +53,6 @@ __pycache__/
 venv/
 .pytest_cache/
 .ruff_cache/
+
+# M2 training data: contains transcript excerpts from the local machine
+train/dataset/*.jsonl
