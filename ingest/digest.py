@@ -173,6 +173,62 @@ def format_digest(digest: DayDigest) -> str:
     return "\n".join(lines)
 
 
+# A session shorter than this has nothing to narrate: a single question and a
+# one-line answer would produce a card that says less than its own metadata, and
+# as training data it teaches the model to pad.
+MIN_SESSION_TURNS = 6
+
+
+def group_by_session(turns: list[ParsedTurn]) -> dict[str, list[ParsedTurn]]:
+    """Bucket turns by their source session."""
+    sessions: dict[str, list[ParsedTurn]] = {}
+    for turn in turns:
+        sessions.setdefault(turn.session_id, []).append(turn)
+    return sessions
+
+
+def build_session_digest(
+    session_id: str, turns: list[ParsedTurn], tz: ZoneInfo
+) -> DayDigest:
+    """A card for one session.
+
+    Reuses the day builder so a session card and a day card cannot drift apart
+    in wording or in what they count. `date` is the session's own local start
+    date, which is what the card is filed under.
+    """
+    start = min(turn.created_at for turn in turns)
+    date = start.astimezone(tz).date().isoformat()
+    digest = build_digest(date, turns, tz)
+
+    # The day headline counts sessions, which reads as nonsense on a card that
+    # IS one session ("36 turns across 1 session(s)"). Session cards get their
+    # own line: a short id to tell them apart, then what the session did.
+    stats = digest.stats
+    short_id = session_id.split(":")[-1][:8]
+    project = stats.projects[0] if stats.projects else "unknown project"
+    tool = next(iter(stats.tool_counts), None)
+    local = start.astimezone(tz)
+    summary = (
+        f"session {short_id} — {stats.turns} turns in {project} "
+        f"from {local:%H:%M}"
+        + (f", mostly {tool}." if tool else ".")
+    )
+    return digest.model_copy(update={"summary": summary})
+
+
+def session_digests(
+    turns: list[ParsedTurn],
+    tz: ZoneInfo,
+    min_turns: int = MIN_SESSION_TURNS,
+) -> dict[str, DayDigest]:
+    """One card per session that clears the turn floor."""
+    return {
+        session_id: build_session_digest(session_id, session_turns, tz)
+        for session_id, session_turns in group_by_session(turns).items()
+        if len(session_turns) >= min_turns
+    }
+
+
 def day_bounds(date: str, tz: ZoneInfo) -> tuple[datetime, datetime]:
     """The UTC instants bracketing one local calendar day."""
     midnight = datetime.fromisoformat(f"{date}T00:00:00").replace(tzinfo=tz)

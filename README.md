@@ -238,6 +238,44 @@ train/holdout. `eval_holdout.py` refuses to publish a compliance rate computed
 on fewer than 30 holdout days, because a rate over a handful of days has an
 error bar wider than the number and it would land on a public page.
 
+### Per-session cards
+
+One card per day caps the training set at one pair per day, which is far too
+slow to reach a usable fine-tune. Ingest also writes one card per session, which
+on this history is 224 cards against 53 days — about 4x the extraction targets,
+and they compound as you work.
+
+```bash
+# session cards are written by default; --no-session-cards opts out
+docker compose run --rm ingest --since 3d
+
+# rebuild every day's cards from T1, no transcript read
+docker compose run --rm ingest --rebuild-cards all
+
+# extract prose for session cards instead of day cards
+.venv/bin/python -m extract.runner --missing --scope session --limit 10 \
+    --provider claude-cli --send-to-provider
+```
+
+Sessions under 6 turns are skipped: a single question and a one-line answer
+produces a card that says less than its own metadata, and as training data it
+teaches the model to pad.
+
+Day and session cards share one table, so every read states its scope
+(`/summaries?scope=day|session|all`, default `day`). Without that the diary's day
+list would silently fill with hundreds of session rows.
+
+A session card costs about 1.7k input tokens against ~11k for a day card, since
+it only sees its own session's turns.
+
+### Prompt versioning
+
+`PROMPT_VERSION` is recorded on every attempt and `--stats` breaks compliance
+down by it. A prompt change moves the rate, so a single pooled number across
+versions would describe neither. The first 46 days ran on `v1`, whose system
+prompt never mentioned `confidence` even though the schema requires it — that one
+omission caused 17 of 19 failures.
+
 ## Metrics policy
 
 The landing page reads `evals/results.json` and renders any `null` as an amber

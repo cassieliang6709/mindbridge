@@ -31,12 +31,14 @@ from api.settings import get_settings
 from . import claude_code, codex_cli
 from .cursors import CursorStore
 from .digest import (
+    MIN_SESSION_TURNS,
     build_digest,
     day_bounds,
     digest_for_period,
     format_digest,
     group_by_day,
     rows_to_turns,
+    session_digests,
 )
 from .models import DayDigest, ParsedTurn, ParseOutcome, SourceKind
 
@@ -75,6 +77,8 @@ async def ingest(
     include_thinking: bool,
     include_sidechains: bool,
     write_summaries: bool,
+    session_cards: bool,
+    min_session_turns: int,
     tz_name: str,
     roots: dict[str, Path],
 ) -> tuple[list[DayDigest], dict[str, int]]:
@@ -87,6 +91,7 @@ async def ingest(
         "redactions": 0,
         "malformed": 0,
         "skipped_records": 0,
+        "session_cards": 0,
     }
     all_turns: list[ParsedTurn] = []
 
@@ -183,7 +188,8 @@ async def ingest(
     for date in dates:
         start, end = day_bounds(date, tz)
         rows = await service.turns.rows_for_digest(start, end)
-        digest = build_digest(date, rows_to_turns(rows), tz)
+        day_turns = rows_to_turns(rows)
+        digest = build_digest(date, day_turns, tz)
         digests.append(digest)
         if write_summaries:
             await service.write_summary(
@@ -194,6 +200,24 @@ async def ingest(
                     session_id=None,
                 )
             )
+
+            # Session cards, built from the same day's rows so a session card
+            # and its day card always agree. These exist mainly to multiply the
+            # extraction targets: one card per day caps the training set at one
+            # pair per day, which is far too slow to reach a usable fine-tune.
+            if session_cards:
+                for session_id, session_digest in session_digests(
+                    day_turns, tz, min_session_turns
+                ).items():
+                    await service.write_summary(
+                        SummaryCardCreate(
+                            period=session_digest.date,
+                            summary=session_digest.summary,
+                            developer_behavior_facts=session_digest.facts,
+                            session_id=session_id,
+                        )
+                    )
+                    totals["session_cards"] += 1
 
     return digests, totals
 
@@ -263,6 +287,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write T1 turns but skip the T2 day cards.",
     )
     parser.add_argument(
+        "--no-session-cards",
+        action="store_true",
+        help="Write only day cards, not one card per session.",
+    )
+    parser.add_argument(
+        "--min-session-turns",
+        type=int,
+        default=MIN_SESSION_TURNS,
+        help=(
+            f"Skip sessions shorter than this when writing session cards "
+            f"(default {MIN_SESSION_TURNS})."
+        ),
+    )
+    parser.add_argument(
         "--timezone",
         default="America/New_York",
         help=(
@@ -277,8 +315,9 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DATE",
         nargs="+",
         help=(
-            "Rebuild the T2 card for these local dates (YYYY-MM-DD) from T1, "
-            "without reading any transcript. Use after changing digest rules."
+            "Rebuild T2 cards for these local dates (YYYY-MM-DD) from T1, "
+            "without reading any transcript. Pass 'all' for every known day. "
+            "Use after changing digest rules."
         ),
     )
     parser.add_argument(
@@ -319,11 +358,18 @@ async def main_async(argv: list[str] | None = None) -> int:
             return 0
         if args.rebuild_cards:
             tz = ZoneInfo(args.timezone)
+            dates = args.rebuild_cards
+            if dates == ["all"]:
+                # Every day that has turns, so a digest-rule change can be
+                # applied to the whole history without re-reading transcripts.
+                dates = await service.summaries.known_periods()
             rebuilt: list[DayDigest] = []
-            for date in args.rebuild_cards:
+            sessions_written = 0
+            for date in dates:
                 start, end = day_bounds(date, tz)
                 rows = await service.turns.rows_for_digest(start, end)
-                digest = build_digest(date, rows_to_turns(rows), tz)
+                day_turns = rows_to_turns(rows)
+                digest = build_digest(date, day_turns, tz)
                 await service.write_summary(
                     SummaryCardCreate(
                         period=digest.date,
@@ -332,9 +378,26 @@ async def main_async(argv: list[str] | None = None) -> int:
                         session_id=None,
                     )
                 )
+                if not args.no_session_cards:
+                    for session_id, session_digest in session_digests(
+                        day_turns, tz, args.min_session_turns
+                    ).items():
+                        await service.write_summary(
+                            SummaryCardCreate(
+                                period=session_digest.date,
+                                summary=session_digest.summary,
+                                developer_behavior_facts=session_digest.facts,
+                                session_id=session_id,
+                            )
+                        )
+                        sessions_written += 1
                 rebuilt.append(digest)
-            for digest in rebuilt:
+            for digest in rebuilt[-args.limit_days :]:
                 print(format_digest(digest))
+            print(
+                f"\nrebuilt {len(rebuilt)} day card(s) and "
+                f"{sessions_written} session card(s) from T1"
+            )
             return 0
         if args.reset_cursors:
             removed = await CursorStore(service._pool).reset()  # noqa: SLF001
@@ -354,6 +417,8 @@ async def main_async(argv: list[str] | None = None) -> int:
             include_thinking=args.include_thinking,
             include_sidechains=args.include_sidechains,
             write_summaries=not args.no_summaries,
+            session_cards=not args.no_session_cards,
+            min_session_turns=args.min_session_turns,
             tz_name=args.timezone,
             roots={
                 "claude-code": args.claude_root,

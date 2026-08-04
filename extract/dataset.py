@@ -51,6 +51,7 @@ class DatasetWriter:
                         "date": result.date,
                         "provider": result.provider,
                         "model": result.model,
+                        "prompt_version": result.prompt_version,
                         "ok": result.ok,
                         "first_attempt_valid": result.first_attempt_valid,
                         "attempts": [
@@ -93,6 +94,9 @@ def compliance_stats(attempts_path: Path = DEFAULT_ATTEMPTS_LOG) -> dict[str, ob
     attempts_total = 0
     input_tokens = output_tokens = 0
     error_kinds: dict[str, int] = {}
+    # Compliance is also broken out per prompt version: a prompt change can move
+    # the rate, so one pooled number across versions would describe neither.
+    by_version: dict[str, dict[str, int]] = {}
 
     with attempts_path.open(encoding="utf-8") as handle:
         for line in handle:
@@ -103,6 +107,10 @@ def compliance_stats(attempts_path: Path = DEFAULT_ATTEMPTS_LOG) -> dict[str, ob
             days += 1
             first_ok += bool(record.get("first_attempt_valid"))
             eventual_ok += bool(record.get("ok"))
+            version = str(record.get("prompt_version") or "v1-unversioned")
+            bucket = by_version.setdefault(version, {"days": 0, "first_ok": 0})
+            bucket["days"] += 1
+            bucket["first_ok"] += bool(record.get("first_attempt_valid"))
             for attempt in record.get("attempts", []):
                 attempts_total += 1
                 fenced += bool(attempt.get("unfenced"))
@@ -125,6 +133,13 @@ def compliance_stats(attempts_path: Path = DEFAULT_ATTEMPTS_LOG) -> dict[str, ob
         "replies_needing_fence_strip": fenced,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
+        "by_prompt_version": {
+            version: {
+                **counts,
+                "first_attempt_rate": round(counts["first_ok"] / counts["days"], 4),
+            }
+            for version, counts in sorted(by_version.items())
+        },
         "most_common_failures": dict(
             sorted(error_kinds.items(), key=lambda item: -item[1])[:8]
         ),

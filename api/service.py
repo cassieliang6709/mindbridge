@@ -23,6 +23,7 @@ from .memory import (
     count_tokens,
 )
 from .models import (
+    CardScope,
     MemoryHit,
     MemoryWithDecay,
     SessionBuffer,
@@ -114,9 +115,12 @@ class MemoryService:
         return await self.summaries.upsert(card)
 
     async def list_summaries(
-        self, session_id: str | None = None, limit: int = 30
+        self,
+        session_id: str | None = None,
+        limit: int = 30,
+        scope: CardScope = "day",
     ) -> list[SummaryCard]:
-        return await self.summaries.list_cards(session_id, limit)
+        return await self.summaries.list_cards(session_id, limit, scope)
 
     # --- T3 ---------------------------------------------------------------
 

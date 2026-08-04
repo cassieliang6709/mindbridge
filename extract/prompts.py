@@ -46,10 +46,20 @@ habit, a standing constraint. Today's task is not a preference. Return an empty 
 preferences list rather than inventing one.
 6. Quote or closely paraphrase the transcript in each preference's evidence \
 field.
+7. Every preference needs all four fields: content, category, confidence and \
+evidence. confidence is a number between 0 and 1 — how sure you are the \
+preference is durable, not how important it is. Omitting it is the single most \
+common way this reply gets rejected.
 
 Return JSON matching this schema:
 %s
 """
+
+# Bumped whenever the prompt changes in a way that could move compliance.
+# Recorded per attempt so a first-pass rate is never a silent blend of two
+# different prompts — v1 never mentioned `confidence`, which the schema requires,
+# and that alone accounted for 17 of 19 failures across the first 46 days.
+PROMPT_VERSION = "v2-confidence-explicit"
 
 
 def system_prompt() -> str:

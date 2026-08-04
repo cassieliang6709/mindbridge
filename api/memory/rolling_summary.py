@@ -6,7 +6,7 @@ import json
 
 import asyncpg
 
-from ..models import NarrativeUpdate, SummaryCard, SummaryCardCreate
+from ..models import CardScope, NarrativeUpdate, SummaryCard, SummaryCardCreate
 from .tokens import count_tokens
 
 _CARD_COLUMNS = """
@@ -66,17 +66,33 @@ class RollingSummaryStore:
         self,
         session_id: str | None = None,
         limit: int = 30,
+        scope: CardScope = "day",
     ) -> list[SummaryCard]:
+        """List cards, scoped explicitly.
+
+        `scope` exists because session-scoped and day-scoped cards live in the
+        same table. Passing session_id=None used to mean "no filter", which
+        returned both — so adding per-session cards would have flooded the
+        diary's day list with hundreds of session rows. The caller now has to
+        say which it wants, and "day" is the default because that is the
+        product surface.
+        """
         rows = await self._pool.fetch(
             f"""
             SELECT {_CARD_COLUMNS}
             FROM rolling_summaries
             WHERE ($1::text IS NULL OR session_id = $1)
-            ORDER BY period DESC
+              AND (
+                    $3 = 'all'
+                 OR ($3 = 'day' AND session_id IS NULL)
+                 OR ($3 = 'session' AND session_id IS NOT NULL)
+              )
+            ORDER BY period DESC, session_id NULLS FIRST
             LIMIT $2
             """,
             session_id,
             limit,
+            scope,
         )
         return [_row_to_card(row) for row in rows]
 
@@ -92,6 +108,17 @@ class RollingSummaryStore:
             session_id,
         )
         return _row_to_card(row) if row is not None else None
+
+    async def known_periods(self) -> list[str]:
+        """Every period that has a day card, oldest first."""
+        rows = await self._pool.fetch(
+            """
+            SELECT period FROM rolling_summaries
+            WHERE session_id IS NULL
+            ORDER BY period ASC
+            """
+        )
+        return [row["period"] for row in rows]
 
     async def set_narrative(self, update: NarrativeUpdate) -> SummaryCard | None:
         """Layer M2 prose onto an existing card.
@@ -115,7 +142,8 @@ class RollingSummaryStore:
                 model = $6,
                 extracted_at = now(),
                 updated_at = now()
-            WHERE period = $1 AND session_id IS NULL
+            WHERE period = $1
+              AND (($7::text IS NULL AND session_id IS NULL) OR session_id = $7)
             RETURNING {_CARD_COLUMNS}
             """,
             update.period,
@@ -124,5 +152,6 @@ class RollingSummaryStore:
             threads,
             update.generated_by,
             update.model,
+            update.session_id,
         )
         return _row_to_card(row) if row is not None else None

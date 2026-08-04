@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
-from .prompts import DayInput, repair_prompt, system_prompt
+from .prompts import PROMPT_VERSION, DayInput, repair_prompt, system_prompt
 from .providers import ChatProvider, Message
 from .schemas import DiaryDraft
 
@@ -46,6 +46,7 @@ class ExtractionResult:
     attempts: list[Attempt] = field(default_factory=list)
     provider: str = ""
     model: str = ""
+    prompt_version: str = PROMPT_VERSION
     prompt_messages: list[Message] = field(default_factory=list)
     extracted_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)

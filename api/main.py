@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, statu
 from pydantic import BaseModel
 
 from .models import (
+    CardScope,
     MemoryWithDecay,
     SessionBuffer,
     SummaryCard,
@@ -109,8 +110,15 @@ async def list_summaries(
     service: ServiceDep,
     session_id: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=365)] = 30,
+    scope: Annotated[CardScope, Query()] = "day",
 ) -> list[SummaryCard]:
-    return await service.list_summaries(session_id, limit)
+    """Day cards by default.
+
+    Session cards live in the same table, so the scope is explicit: without it
+    the diary's day list would silently fill with hundreds of session rows the
+    moment per-session cards were written.
+    """
+    return await service.list_summaries(session_id, limit, scope)
 
 
 # --- T3 -------------------------------------------------------------------

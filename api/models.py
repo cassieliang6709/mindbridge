@@ -17,6 +17,9 @@ MemoryCategory = Literal[
 
 UpsertAction = Literal["inserted", "refreshed", "superseded"]
 
+# Day cards and session cards share one table, so every read says which it wants.
+CardScope = Literal["day", "session", "all"]
+
 
 class Turn(BaseModel):
     """One raw prompt or response in T1."""
@@ -92,6 +95,10 @@ class NarrativeUpdate(BaseModel):
     open_threads: list[str] = Field(default_factory=list)
     generated_by: str = Field(min_length=1)
     model: str
+    session_id: str | None = Field(
+        default=None,
+        description="None targets the day card; a value targets that session's.",
+    )
 
 
 class MemoryRecord(BaseModel):

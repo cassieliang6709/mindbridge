@@ -56,12 +56,20 @@ def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float |
     return input_tokens / 1e6 * price[0] + output_tokens / 1e6 * price[1]
 
 
-async def _load_day(service: MemoryService, date: str, tz_name: str):
-    """Fetch the facts and turns for one local day."""
+async def _load_target(
+    service: MemoryService, date: str, session_id: str | None, tz_name: str
+):
+    """Fetch the facts and turns behind one card.
+
+    A day card sees every turn in the local day; a session card sees only that
+    session's, so the prose describes the session rather than the whole day.
+    """
     tz = ZoneInfo(tz_name)
     start, end = day_bounds(date, tz)
-    card = await service.summaries.get(date)
+    card = await service.summaries.get(date, session_id)
     rows = await service.turns.list_between(start, end, limit=4000)
+    if session_id is not None:
+        rows = [row for row in rows if row.session_id == session_id]
     turns = [(row.role, row.content) for row in rows]
     facts = card.developer_behavior_facts if card else []
     return card, facts, turns
@@ -77,19 +85,25 @@ async def run(args: argparse.Namespace) -> int:
             print(json.dumps(compliance_stats(), indent=2, ensure_ascii=False))
             return 0
 
-        # Decide which dates to work on.
+        # Work items are (period, session_id); session_id None means the day card.
+        targets: list[tuple[str, str | None]] = []
         if args.date:
-            dates = list(args.date)
+            targets = [(date, None) for date in args.date]
         elif args.missing:
-            cards = await service.list_summaries(limit=200)
-            dates = [card.period for card in cards if not card.narrative]
-            dates = dates[: args.limit]
+            cards = await service.list_summaries(limit=365, scope=args.scope)
+            targets = [
+                (card.period, card.session_id)
+                for card in cards
+                if not card.narrative
+            ][: args.limit]
         else:
             print("give --date DATE... or --missing", file=sys.stderr)
             return 2
 
-        if not dates:
-            print("nothing to do: every card already has a narrative")
+        if not targets:
+            print(
+                f"nothing to do: every {args.scope} card already has a narrative"
+            )
             return 0
 
         provider = None
@@ -142,13 +156,16 @@ async def run(args: argparse.Namespace) -> int:
         estimated_input = 0
         results: list[ExtractionResult] = []
 
-        for date in dates:
-            card, facts, turns = await _load_day(service, date, args.timezone)
+        for date, session_id in targets:
+            label = date if session_id is None else f"{date} {session_id[-12:]}"
+            card, facts, turns = await _load_target(
+                service, date, session_id, args.timezone
+            )
             if card is None:
-                print(f"{date}: no T2 card — run ingest first", file=sys.stderr)
+                print(f"{label}: no T2 card — run ingest first", file=sys.stderr)
                 continue
             if card.narrative and not args.force:
-                print(f"{date}: already has a narrative (use --force to redo)")
+                print(f"{label}: already has a narrative (use --force to redo)")
                 continue
 
             day = build_day_input(
@@ -161,7 +178,7 @@ async def run(args: argparse.Namespace) -> int:
                 print(day.render())
                 print("-" * 72)
                 print(
-                    f"{date}: {day.sampled_turns}/{day.total_turns} turns kept, "
+                    f"{label}: {day.sampled_turns}/{day.total_turns} turns kept, "
                     f"~{day.estimated_tokens()} input tokens"
                 )
                 continue
@@ -175,7 +192,7 @@ async def run(args: argparse.Namespace) -> int:
 
             if not result.ok:
                 print(
-                    f"{date}: FAILED after {len(result.attempts)} attempt(s); "
+                    f"{label}: FAILED after {len(result.attempts)} attempt(s); "
                     "card left as the rule-based version"
                 )
                 continue
@@ -185,6 +202,7 @@ async def run(args: argparse.Namespace) -> int:
             await service.summaries.set_narrative(
                 NarrativeUpdate(
                     period=date,
+                    session_id=session_id,
                     narrative=draft.narrative,
                     highlights=draft.highlights,
                     open_threads=draft.open_threads,
@@ -213,16 +231,16 @@ async def run(args: argparse.Namespace) -> int:
                     )
 
             print(
-                f"{date}: ok in {len(result.attempts)} attempt(s), "
+                f"{label}: ok in {len(result.attempts)} attempt(s), "
                 f"{len(draft.highlights)} highlight(s), {written} preference(s), "
                 f"dataset={'+1' if captured else 'skipped'}"
             )
 
         if args.dry_run:
-            cost = _estimate_cost(model_name, estimated_input, len(dates) * 500)
+            cost = _estimate_cost(model_name, estimated_input, len(targets) * 500)
             print("=" * 72)
             print(
-                f"DRY RUN: {len(dates)} day(s), ~{estimated_input} input tokens "
+                f"DRY RUN: {len(targets)} card(s), ~{estimated_input} input tokens "
                 f"total for {model_name}"
             )
             if cost is not None:
@@ -253,6 +271,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Process cards that have no narrative yet, newest first.",
     )
     parser.add_argument("--limit", type=int, default=3)
+    parser.add_argument(
+        "--scope",
+        choices=["day", "session", "all"],
+        default="day",
+        help=(
+            "Which cards --missing walks. 'session' is the volume play: one "
+            "card per session instead of one per day."
+        ),
+    )
     parser.add_argument(
         "--provider",
         choices=["openai", "gemini", "claude-cli"],
