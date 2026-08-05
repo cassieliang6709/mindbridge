@@ -185,7 +185,10 @@ async def run(args: argparse.Namespace) -> int:
 
             assert provider is not None
             result = await extract_day(
-                provider, day, max_attempts=args.max_attempts
+                provider,
+                day,
+                max_attempts=args.max_attempts,
+                session_id=session_id,
             )
             results.append(result)
             captured = writer.append(result)

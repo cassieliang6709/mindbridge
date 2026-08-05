@@ -49,6 +49,7 @@ class DatasetWriter:
                 json.dumps(
                     {
                         "date": result.date,
+                        "session_id": result.session_id,
                         "provider": result.provider,
                         "model": result.model,
                         "prompt_version": result.prompt_version,

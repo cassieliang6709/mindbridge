@@ -169,12 +169,7 @@ export function MemoryConsole() {
 
   const fetchDiary = useCallback(
     async (date: string | null): Promise<DiaryPayload> => {
-      // getTimezoneOffset() is what the backend needs to turn a local date into
-      // the matching UTC instant, so the day boundary is the browser's, not the
-      // server's.
-      const query = new URLSearchParams({
-        offset: String(new Date().getTimezoneOffset()),
-      });
+      const query = new URLSearchParams();
       if (date) query.set("date", date);
       const response = await fetch(`/api/diary?${query}`, { cache: "no-store" });
       return (await response.json()) as DiaryPayload;

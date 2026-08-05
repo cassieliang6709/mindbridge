@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import Field, PostgresDsn, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-EmbeddingProvider = Literal["openai", "gemini", "hashing"]
+EmbeddingProvider = Literal["openai", "gemini", "ollama", "hashing"]
 
 
 class Settings(BaseSettings):
@@ -33,11 +33,18 @@ class Settings(BaseSettings):
     embedding_provider: EmbeddingProvider = Field(
         default="hashing",
         description=(
-            "'openai' or 'gemini' call a hosted embedding API. 'hashing' is a "
-            "deterministic local fallback that needs no key and no network; it "
-            "captures lexical overlap only, NOT semantics. Never report a "
-            "benchmark produced under 'hashing' as a semantic result."
+            "'ollama' runs a real embedding model locally (no key, nothing "
+            "leaves the machine) and is the only option under which write-time "
+            "dedup actually works. 'openai'/'gemini' call a hosted API. "
+            "'hashing' is a deterministic fallback that captures lexical "
+            "overlap only, NOT semantics: it scores known duplicates 0.13-0.73, "
+            "so no dedup threshold separates them from unrelated facts. Never "
+            "report a benchmark produced under 'hashing' as a semantic result."
         ),
+    )
+    ollama_url: str = Field(
+        default="http://localhost:11434",
+        description="Use http://host.docker.internal:11434 from a container.",
     )
     embedding_dim: int = Field(
         default=1536,

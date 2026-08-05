@@ -62,27 +62,37 @@ def main() -> int:
         )
         return 1
 
-    # De-duplicate by date, keeping the last extraction for a day.
-    by_date: dict[str, dict] = {}
+    # De-duplicate by (date, session), keeping the last extraction for each.
+    # Keying on date alone silently collapsed every session card onto its day —
+    # 86 captured pairs became 53, throwing away a third of the training data.
+    # Legacy rows predate session_id, so they fall back to a hash of the prompt.
+    by_key: dict[tuple[str, str], dict] = {}
     for pair in pairs:
-        by_date[pair["date"]] = pair
+        session = pair.get("session_id")
+        if session is None:
+            prompt = pair["messages"][-1]["content"] if pair.get("messages") else ""
+            session = hashlib.blake2b(prompt.encode(), digest_size=8).hexdigest()
+        by_key[(pair["date"], session)] = pair
 
+    # Still split BY DATE, not by pair: sessions from one day share context, so
+    # letting them straddle the split would leak train data into the holdout.
     holdout_dates = {
-        date for date in by_date if _bucket(date) < args.holdout_frac
+        date for date, _ in by_key if _bucket(date) < args.holdout_frac
     }
-    train = [pair for date, pair in sorted(by_date.items()) if date not in holdout_dates]
-    holdout = [pair for date, pair in sorted(by_date.items()) if date in holdout_dates]
+    train = [p for (date, _), p in sorted(by_key.items()) if date not in holdout_dates]
+    holdout = [p for (date, _), p in sorted(by_key.items()) if date in holdout_dates]
 
     first_valid = sum(
-        1 for pair in by_date.values() if pair["meta"]["first_attempt_valid"]
+        1 for pair in by_key.values() if pair["meta"]["first_attempt_valid"]
     )
+    days = {date for date, _ in by_key}
 
     print(f"pairs on disk:      {len(pairs)}")
-    print(f"distinct days:      {len(by_date)}")
+    print(f"unique pairs:       {len(by_key)}  across {len(days)} day(s)")
     print(f"train / holdout:    {len(train)} / {len(holdout)}")
     print(
-        f"teacher first-pass: {first_valid}/{len(by_date)} "
-        f"({first_valid / len(by_date):.0%}) — the bar the tuned model must clear"
+        f"teacher first-pass: {first_valid}/{len(by_key)} "
+        f"({first_valid / len(by_key):.0%}) — the bar the tuned model must clear"
     )
     if len(train) < MIN_PAIRS_FOR_TRAINING:
         print(

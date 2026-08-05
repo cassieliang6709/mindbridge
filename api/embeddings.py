@@ -127,7 +127,51 @@ class GeminiEmbedder:
         return [item["values"] for item in payload["embeddings"]]
 
 
+class OllamaEmbedder:
+    """Local semantic embeddings through ollama.
+
+    The reason this exists: the hashing fallback measures token overlap, so it
+    scores real duplicates 0.13-0.73 — "Use uv instead of pip" against
+    "Python 项目优先用 uv" lands at 0.25 because they share almost no tokens.
+    No threshold separates duplicates from unrelated preferences, so write-time
+    dedup silently never fires and T3 fills with paraphrases of one fact.
+
+    Measured on the same pairs, nomic-embed-text scores duplicates 0.67-0.86 and
+    unrelated preferences 0.34-0.44, which a threshold around 0.62 separates.
+
+    Unlike the hosted embedders this keeps the local-only promise intact, which
+    matters because embeddings are computed on every preference write.
+    """
+
+    name = "ollama"
+
+    def __init__(self, settings: Settings) -> None:
+        self.dim = settings.embedding_dim
+        self._model = settings.embedding_model
+        self._url = str(settings.ollama_url).rstrip("/")
+        self._timeout = settings.embedding_timeout_seconds
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            response = await client.post(
+                f"{self._url}/api/embed",
+                json={"model": self._model, "input": texts},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        vectors = payload["embeddings"]
+        if vectors and len(vectors[0]) != self.dim:
+            raise ValueError(
+                f"{self._model} returned {len(vectors[0])}-dim vectors but "
+                f"MINDBRIDGE_EMBEDDING_DIM is {self.dim}"
+            )
+        # Normalised so pgvector's cosine distance and a plain dot product agree.
+        return [_l2_normalise(vector) for vector in vectors]
+
+
 def build_embedder(settings: Settings) -> Embedder:
+    if settings.embedding_provider == "ollama":
+        return OllamaEmbedder(settings)
     if settings.embedding_provider == "openai":
         return OpenAIEmbedder(settings)
     if settings.embedding_provider == "gemini":

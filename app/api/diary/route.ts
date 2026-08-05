@@ -17,6 +17,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_BASE = process.env.MINDBRIDGE_API_URL ?? "http://localhost:8000";
 const TIMEOUT_MS = 2500;
+const CARD_TIME_ZONE = process.env.MINDBRIDGE_TIMEZONE ?? "America/New_York";
+const CARD_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: CARD_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
 
 export type DiaryTurn = {
   id: number;
@@ -65,29 +76,51 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 /**
- * A day runs from local midnight to local midnight. The offset comes from the
- * client so the server never has to guess which midnight was meant — the
- * backend takes timestamps, not dates, for exactly this reason.
+ * Cards are built by ingestion in CARD_TIME_ZONE, so the raw-turn window must
+ * use the same timezone regardless of where the browser happens to be.
  */
-function dayRange(date: string, offsetMinutes: number): { start: string; end: string } {
-  const startUtcMs = Date.parse(`${date}T00:00:00Z`) + offsetMinutes * 60_000;
+function zonedMidnightUtc(date: string): number {
+  const localMidnightAsUtc = Date.parse(`${date}T00:00:00Z`);
+  let utcMs = localMidnightAsUtc;
+
+  // Re-evaluate after applying the offset so DST transitions converge on the
+  // offset that is actually in force at local midnight.
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    const parts = Object.fromEntries(
+      CARD_TIME_FORMATTER.formatToParts(new Date(utcMs))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    const wallClockAsUtc = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    utcMs = localMidnightAsUtc - (wallClockAsUtc - utcMs);
+  }
+  return utcMs;
+}
+
+function dayRange(date: string): { start: string; end: string } {
+  const nextDate = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
   return {
-    start: new Date(startUtcMs).toISOString(),
-    end: new Date(startUtcMs + 86_400_000).toISOString(),
+    start: new Date(zonedMidnightUtc(date)).toISOString(),
+    end: new Date(zonedMidnightUtc(nextDate)).toISOString(),
   };
 }
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const date = params.get("date");
-  // Date.getTimezoneOffset() is positive west of UTC and is exactly what must
-  // be added to a local wall-clock midnight to reach the matching UTC instant,
-  // so the client sends it through unchanged.
-  const offsetMinutes = Number(params.get("offset") ?? "0");
 
   try {
     const [cards, memories] = await Promise.all([
-      getJson<DiaryCard[]>("/summaries?limit=30"),
+      getJson<DiaryCard[]>("/summaries?limit=365"),
       getJson<DiaryMemory[]>("/memories?limit=40&include_superseded=true"),
     ]);
 
@@ -95,7 +128,7 @@ export async function GET(request: NextRequest) {
     let turns: DiaryTurn[] = [];
     let turnsTotal = 0;
     if (selected) {
-      const { start, end } = dayRange(selected, offsetMinutes);
+      const { start, end } = dayRange(selected);
       const window = await getJson<{
         turns: DiaryTurn[];
         total: number;

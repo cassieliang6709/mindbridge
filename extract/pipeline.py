@@ -43,6 +43,7 @@ class Attempt:
 class ExtractionResult:
     date: str
     draft: DiaryDraft | None
+    session_id: str | None = None
     attempts: list[Attempt] = field(default_factory=list)
     provider: str = ""
     model: str = ""
@@ -89,6 +90,7 @@ async def extract_day(
     day: DayInput,
     *,
     max_attempts: int = 3,
+    session_id: str | None = None,
 ) -> ExtractionResult:
     """Ask for a day's diary, validating and repairing until it fits."""
     messages = [
@@ -98,6 +100,7 @@ async def extract_day(
     result = ExtractionResult(
         date=day.date,
         draft=None,
+        session_id=session_id,
         provider=provider.name,
         model=provider.model,
         prompt_messages=list(messages),
@@ -168,6 +171,7 @@ def training_pair(result: ExtractionResult) -> dict[str, object] | None:
         return None
     return {
         "date": result.date,
+        "session_id": result.session_id,
         "messages": [
             {"role": message.role, "content": message.content}
             for message in result.prompt_messages
