@@ -11,11 +11,22 @@ that the previous embedder could not see.
     .venv/bin/python -m scripts.reembed --apply
 
     # then merge near-duplicates at the new threshold
-    ... --apply --merge-duplicates --threshold 0.62
+    ... --apply --merge-duplicates --threshold 0.80
 
 Why this exists: the hashing fallback scores real duplicates 0.13-0.73, so
 write-time dedup never fired and T3 accumulated many phrasings of one fact.
 Switching embedder fixes new writes; this script fixes the rows already stored.
+
+On the threshold: 0.80 was chosen by reading every proposed merge across 170 real
+rows, not by picking a round number. nomic-embed-text puts *topically* related
+preferences around 0.62-0.75 — everything here is "how Cassie likes to work", so
+the space is compressed — and in that band the merges are mostly wrong. One at
+0.686 would have merged "validate with mock data first" into "no fake data
+anywhere", which are nearly opposite. At >=0.80 every proposed merge was a real
+duplicate.
+
+The asymmetry justifies erring high: a missed merge leaves visible clutter, while
+a false merge silently closes a distinct preference and is hard to notice later.
 
 Merging keeps the OLDEST row as canonical. created_at is what decay is measured
 from, and it should reflect when the preference was first learned, not when it
@@ -174,7 +185,7 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--merge-duplicates", action="store_true")
-    parser.add_argument("--threshold", type=float, default=0.62)
+    parser.add_argument("--threshold", type=float, default=0.80)
     parser.add_argument("--show", type=int, default=12)
     args = parser.parse_args()
     if args.apply and args.dry_run:

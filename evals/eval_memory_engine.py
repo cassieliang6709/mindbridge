@@ -549,7 +549,12 @@ def write_results(
 async def run() -> dict[str, Any]:
     settings = get_settings()
     service = await MemoryService.start(settings)
-    semantic = settings.embedding_provider in {"openai", "gemini"}
+    # 'ollama' belongs here: nomic-embed-text is a real semantic embedder, it is
+    # simply a local one. The earlier allowlist named only the hosted providers,
+    # which meant the one provider that keeps the local-only promise was also the
+    # one whose numbers could never be published. 'hashing' stays excluded — it
+    # captures lexical overlap only, and is the whole reason this gate exists.
+    semantic = settings.embedding_provider in {"openai", "gemini", "ollama"}
     try:
         measurements = [
             await measure_token_compression(service),

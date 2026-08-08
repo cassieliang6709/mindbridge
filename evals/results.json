@@ -1,18 +1,18 @@
 {
   "_comment": "Written by evals/eval_memory_engine.py. Every value must come from a reproducible run; null renders as an in-progress badge on the landing page rather than a number. Headline metrics stay null unless the run used a real semantic embedder.",
-  "generatedAt": "2026-08-04T08:36:08+00:00",
-  "commit": null,
+  "generatedAt": "2026-08-06T05:21:50+00:00",
+  "commit": "eaf91aa",
   "environment": {
-    "embedder": "hashing-local",
-    "semantic_embedder": false,
-    "embedding_dim": 1536,
+    "embedder": "ollama",
+    "semantic_embedder": true,
+    "embedding_dim": 768,
     "tokenizer": "cl100k_base",
     "decay_rate_per_day": 0.01,
-    "dedup_threshold": 0.92
+    "dedup_threshold": 0.8
   },
   "metrics": {
-    "promptTokenReduction": null,
-    "dedupAccuracy": null,
+    "promptTokenReduction": "16%",
+    "dedupAccuracy": "100%",
     "decayOrdering": "100%",
     "supersedeExclusion": "100%",
     "extractionJsonAccuracy": null,
@@ -22,32 +22,32 @@
   "measurements": [
     {
       "name": "token_compression",
-      "value": 17.3,
+      "value": 16.1,
       "unit": "percent",
       "note": "Positive means the compact prompt is smaller. Compares resending 12 raw turns against one T2 card plus top-3 T3 recall.",
       "detail": {
         "raw_history_tokens": 287,
         "summary_card_tokens": 101,
-        "mean_compact_tokens": 237.3,
+        "mean_compact_tokens": 240.7,
         "tokenizer": "cl100k_base",
         "per_query": [
           {
             "query": "这个 Python 项目该用什么包管理器",
             "recalled": 3,
-            "recall_tokens": 133,
-            "compact_tokens": 234
+            "recall_tokens": 141,
+            "compact_tokens": 242
           },
           {
             "query": "周六下午能不能约个评审会",
             "recalled": 3,
-            "recall_tokens": 136,
-            "compact_tokens": 237
+            "recall_tokens": 139,
+            "compact_tokens": 240
           },
           {
             "query": "回答的风格有什么要求",
             "recalled": 3,
-            "recall_tokens": 140,
-            "compact_tokens": 241
+            "recall_tokens": 139,
+            "compact_tokens": 240
           }
         ]
       }
@@ -59,7 +59,7 @@
       "note": "A false positive silently merges two different preferences, which is the worse error: the losing fact is never stored at all.",
       "detail": {
         "pairs": 7,
-        "threshold": 0.92,
+        "threshold": 0.8,
         "true_positive": 3,
         "false_positive": 0,
         "true_negative": 4,
@@ -83,7 +83,7 @@
           365.0
         ],
         "newest_first": true,
-        "formula_max_abs_error": 7e-10,
+        "formula_max_abs_error": 1.2e-09,
         "formula_holds": true,
         "rows": [
           {
@@ -156,20 +156,20 @@
       "detail": {
         "cases": 2,
         "detected": 0,
-        "dedup_threshold": 0.92,
+        "dedup_threshold": 0.8,
         "detail": [
           {
             "old": "周末可以加班",
             "new": "周末不排会议",
             "action": "inserted",
-            "similarity": 0.3333,
+            "similarity": 0.6011,
             "auto_superseded": false
           },
           {
             "old": "用 pip 安装依赖",
             "new": "Python 项目优先用 uv",
             "action": "inserted",
-            "similarity": 0.1543,
+            "similarity": 0.6139,
             "auto_superseded": false
           }
         ]

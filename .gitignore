@@ -56,3 +56,10 @@ venv/
 
 # M2 training data: contains transcript excerpts from the local machine
 train/dataset/*.jsonl
+# Derived from the above, so it carries the same transcript excerpts verbatim.
+# /outputs/ above is root-anchored and does not cover these.
+train/mlx_data/
+train/outputs/
+
+# Database dumps taken before migrations; contain personal preference text
+backups/

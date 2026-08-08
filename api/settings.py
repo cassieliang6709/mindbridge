@@ -72,12 +72,15 @@ class Settings(BaseSettings):
         ),
     )
     dedup_threshold: float = Field(
-        default=0.92,
+        default=0.80,
         ge=0.0,
         le=1.0,
         description=(
             "Cosine similarity at or above which an incoming preference is "
-            "treated as the same fact and refreshed instead of inserted."
+            "treated as the same fact and refreshed instead of inserted. 0.80 "
+            "was read off 170 real rows under nomic-embed-text: below it, "
+            "merges are mostly topical rather than duplicate. Retune when "
+            "changing embedding model — this number is model-specific."
         ),
     )
     default_top_k: int = 5

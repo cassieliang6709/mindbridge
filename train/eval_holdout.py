@@ -41,6 +41,33 @@ RESULTS = Path("evals/results.json")
 HOSTED_PRICES = {"gpt-4o-mini": (0.15, 0.60), "gemini-2.5-flash": (0.30, 2.50)}
 
 
+def validate_reply(text: str) -> tuple[bool, str | None]:
+    """Does this reply satisfy the extraction contract? The metric's definition.
+
+    Lives here, and is imported by every evaluator (see train/eval_mlx.py),
+    because "extractionJsonAccuracy" only means something if the teacher and the
+    tuned model are judged by byte-identical rules. A second copy of this
+    function is how a comparison quietly stops being a comparison.
+
+    A code fence is stripped before validating — that is formatting, not a
+    schema failure, and it is the same allowance stage one made for the teacher.
+    """
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`")
+        if stripped.startswith("json"):
+            stripped = stripped[4:]
+
+    try:
+        DiaryDraft.model_validate_json(stripped)
+    except ValidationError as error:
+        return False, "; ".join(
+            f"{'.'.join(str(p) for p in item['loc']) or '(root)'}: {item['msg']}"
+            for item in error.errors()
+        )
+    return True, None
+
+
 async def _one(
     client: httpx.AsyncClient,
     endpoint: str,
@@ -62,23 +89,7 @@ async def _one(
     text = payload["choices"][0]["message"]["content"]
     usage = payload.get("usage") or {}
 
-    # Strip a fence before validating: formatting, not a schema failure. Same
-    # rule stage one applied to the teacher.
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.strip("`")
-        if stripped.startswith("json"):
-            stripped = stripped[4:]
-
-    try:
-        DiaryDraft.model_validate_json(stripped)
-        valid, errors = True, None
-    except ValidationError as error:
-        valid = False
-        errors = "; ".join(
-            f"{'.'.join(str(p) for p in item['loc']) or '(root)'}: {item['msg']}"
-            for item in error.errors()
-        )
+    valid, errors = validate_reply(text)
 
     return {
         "date": row["date"],

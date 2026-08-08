@@ -276,6 +276,37 @@ versions would describe neither. The first 46 days ran on `v1`, whose system
 prompt never mentioned `confidence` even though the schema requires it — that one
 omission caused 17 of 19 failures.
 
+## Measured baselines
+
+| what | value | n | how |
+| --- | --- | --- | --- |
+| Teacher first-attempt schema compliance | **81.4%** | 86 | Sonnet via claude-cli, unconstrained; `--stats` |
+| Teacher eventual compliance (with repair) | 100% | 86 | same |
+
+81.4% is the bar stage two's fine-tuned model has to clear, judged by the same
+rule (first reply only, repairs excluded). Two prompt versions sit inside it —
+v1 83%, v2 80% — and the difference is noise: v2 added an explicit instruction
+about the `confidence` field, and it did not help. The model drops that field on
+roughly one call in five regardless, which is variance rather than a prompt gap.
+
+## Rebuilding the database from scratch
+
+Postgres is disposable. Everything needed to reconstruct it lives outside:
+transcripts on disk, and every extraction in `train/dataset/extraction.jsonl`,
+written there before it ever touched the database.
+
+```bash
+# T1 turns + T2 day/session cards, from the transcripts
+.venv/bin/python -m ingest.runner --full
+
+# T2 narratives + T3 preferences, from the captured dataset — no model calls
+.venv/bin/python -m scripts.replay_extractions --apply
+```
+
+Replaying costs nothing and reproduces byte-identical prose. It also re-writes
+preferences through the *current* embedder and threshold, so rows first stored
+under the non-semantic hashing embedder come back deduplicated.
+
 ## Metrics policy
 
 The landing page reads `evals/results.json` and renders any `null` as an amber
