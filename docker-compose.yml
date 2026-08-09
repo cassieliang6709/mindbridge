@@ -52,12 +52,15 @@ services:
       MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
       MINDBRIDGE_REDIS_URL: redis://redis:6379/0
       MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
-      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
       MINDBRIDGE_EMBEDDING_MODEL: ${MINDBRIDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      MINDBRIDGE_DEDUP_THRESHOLD: ${MINDBRIDGE_DEDUP_THRESHOLD:-0.80}
+      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      # ollama runs on the host; localhost inside a container is the
+      # container. host.docker.internal reaches back out to the Mac.
+      MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
       MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-}
       MINDBRIDGE_GEMINI_API_KEY: ${MINDBRIDGE_GEMINI_API_KEY:-}
       MINDBRIDGE_DECAY_RATE_PER_DAY: ${MINDBRIDGE_DECAY_RATE_PER_DAY:-0.01}
-      MINDBRIDGE_DEDUP_THRESHOLD: ${MINDBRIDGE_DEDUP_THRESHOLD:-0.92}
     ports:
       - "${MINDBRIDGE_API_PORT:-8000}:8000"
     depends_on:
@@ -76,7 +79,12 @@ services:
       MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
       MINDBRIDGE_REDIS_URL: redis://redis:6379/0
       MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_MODEL: ${MINDBRIDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      MINDBRIDGE_DEDUP_THRESHOLD: ${MINDBRIDGE_DEDUP_THRESHOLD:-0.80}
       MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      # ollama runs on the host; localhost inside a container is the
+      # container. host.docker.internal reaches back out to the Mac.
+      MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
       MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-}
     volumes:
       # results.json is written back into the working tree, and the source is
@@ -112,7 +120,12 @@ services:
       MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
       MINDBRIDGE_REDIS_URL: redis://redis:6379/0
       MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_MODEL: ${MINDBRIDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      MINDBRIDGE_DEDUP_THRESHOLD: ${MINDBRIDGE_DEDUP_THRESHOLD:-0.80}
       MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      # ollama runs on the host; localhost inside a container is the
+      # container. host.docker.internal reaches back out to the Mac.
+      MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
       MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
       MINDBRIDGE_GEMINI_API_KEY: ${MINDBRIDGE_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}
     volumes:
@@ -142,7 +155,12 @@ services:
       MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
       MINDBRIDGE_REDIS_URL: redis://redis:6379/0
       MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_MODEL: ${MINDBRIDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      MINDBRIDGE_DEDUP_THRESHOLD: ${MINDBRIDGE_DEDUP_THRESHOLD:-0.80}
       MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      # ollama runs on the host; localhost inside a container is the
+      # container. host.docker.internal reaches back out to the Mac.
+      MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
     volumes:
       - ./api:/app/api
       - ./ingest:/app/ingest
