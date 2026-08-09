@@ -412,6 +412,24 @@ Open [http://localhost:3000](http://localhost:3000), or
 npm run lint && npm run build
 ```
 
+### One-command local-loop proof
+
+For an interview or pre-release check, one command starts any missing local
+services, refreshes one real day card through the private MLX adapter, and
+verifies the same store through REST, the Diary route and an actual MCP stdio
+client:
+
+```bash
+scripts/verify-local-loop.sh             # reuse the newest MLX-written day
+scripts/verify-local-loop.sh 2026-08-08  # or name a T2 day card explicitly
+```
+
+The run refreshes that day's T2 narrative. It deliberately disables preference
+writes during extraction and uses an existing real T3 row as a read-only recall
+probe, so an acceptance test never becomes durable user memory. Services that
+were already running stay running; services started by the script are stopped
+on exit, and Postgres data is preserved.
+
 ## Design
 
 The visual system is ported from the 1Day landing page: blue brand (`#1875ef`),
