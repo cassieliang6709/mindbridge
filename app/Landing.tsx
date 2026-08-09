@@ -106,17 +106,18 @@ const benchRows: {
     en: "Preference-extraction JSON validity",
     zhHow: (
       <>
-        微调后的 Qwen2.5-7B 在 holdout 集上、首次回复即通过 schema 校验的比例
-        （重试不计入）。脚本已就绪：<code>train/eval_holdout.py</code>，等微调模型
-        和足够的 holdout 天数。
+        Qwen2.5-3B MLX LoRA 在按日期隔离的 holdout 上，首次回复即通过 schema
+        校验的比例（重试不计入）。本机固定 seed 的 pilot 已完成；adapter 与训练
+        数据仍是私有本机产物，所以公开指标保持待测量。脚本：<code>train/eval_mlx.py</code>。
       </>
     ),
     enHow: (
       <>
-        Share of holdout days where the fine-tuned Qwen2.5-7B passes schema
-        validation on its FIRST reply; repairs excluded. Script ready:{" "}
-        <code>train/eval_holdout.py</code>, pending the tuned model and enough
-        holdout days.
+        Share of date-isolated holdout pairs where the Qwen2.5-3B MLX LoRA
+        model passes schema validation on its FIRST reply; repairs excluded. A
+        fixed-seed local pilot is complete; the public metric stays pending
+        while the adapter and training data remain private local artifacts.
+        Script: <code>train/eval_mlx.py</code>.
       </>
     ),
   },
@@ -126,15 +127,15 @@ const benchRows: {
     en: "Extraction API cost delta",
     zhHow: (
       <>
-        同一批 holdout 对话，走托管 API 与走本地 vLLM（按 GPU 租用时长折算）
-        的成本对比。脚本已就绪：<code>train/eval_holdout.py</code>。
+        同一批 holdout 对话走托管 API 与本机 MLX 服务的成本对比。Mac 上的推理
+        时间已经记录，但在可部署的服务目标确定前不把它包装成成本节省。
       </>
     ),
     enHow: (
       <>
-        The same holdout days priced through a hosted API versus local vLLM,
-        charging the local side for GPU rental time. Script ready:{" "}
-        <code>train/eval_holdout.py</code>.
+        The same holdout pairs through a hosted API versus the local MLX
+        service. Mac inference time is recorded, but it is not presented as a
+        cost saving until there is a deployable serving target to price.
       </>
     ),
   },
@@ -163,15 +164,17 @@ const benchRows: {
     en: "Cost saved by the semantic cache",
     zhHow: (
       <>
-        LRU + Redis 语义缓存的命中率与折算成本，含误命中率。目前只有精确 key
-        缓存，语义阈值匹配属于 M5，脚本待建。
+        精确 key 的 LRU + Redis 缓存已启用。语义近邻匹配也已实现，但测试中无关
+        短问题相似度达到 0.9992，高于真实同义问题的 0.9064；没有安全阈值，
+        因此保持关闭且不展示“节省成本”。
       </>
     ),
     enHow: (
       <>
-        Hit rate and resulting cost for the LRU + Redis semantic cache,
-        including the false-hit rate. Only the exact-key cache exists today;
-        threshold matching is M5 and the script is not written.
+        Exact-key LRU + Redis caching is on. Semantic neighbour matching is
+        implemented but disabled: an unrelated short-query pair scored 0.9992,
+        above the 0.9064 true paraphrase, so no tested threshold was safe and no
+        cost-saving number is shown.
       </>
     ),
   },
@@ -187,7 +190,7 @@ const copy = {
       "MindBridge 解析本地 AI 编码工具的对话记录，自动生成每日记忆卡，并作为 MCP server 让任意客户端读写这份长期记忆。解析与存储默认全在本机。",
     nav: ["两条捕获路径", "技术结构", "指标"],
     demo: "打开日记界面",
-    stage: "施工中 · 后端逐步接入",
+    stage: "本地闭环已跑通 · 公网展示为样例",
     heroNote: "你已经跟 AI 说过的话，不该再说第二遍。",
     title: (
       <>
@@ -254,12 +257,12 @@ const copy = {
     localNote:
       "解析与存储都在本机：读你自己机器上的 transcript，写本地 Postgres。",
     extractorNote:
-      "例外要说清楚：把一天写成散文的那一步目前走托管 API，会把当天的对话摘录发出去，所以它是显式开关、默认关闭 —— 不开就只有本地算出来的计数。等微调模型跑在本地 vLLM 上，这一步才回到本机。",
+      "本地路径已跑通：Qwen2.5-3B MLX LoRA 在本机把 transcript 抽成 schema JSON，并经同一个 MemoryService 写入 T2/T3。托管抽取仍保留为生成训练数据的显式选项，只有传入 --send-to-provider 才会发送摘录。",
     coverage:
       "覆盖范围说清楚：路径 A 只对有本地结构化日志的工具成立（Claude Code、Codex CLI）；路径 B 对任意 MCP 客户端成立。ChatGPT 与网页版 Claude 的历史没有 API，只能手动导出，不在自动范围内。",
     archTitle: "技术结构",
     archNote:
-      "Python · FastAPI · Qwen2.5-7B + QLoRA · vLLM · MCP · Postgres/pgvector · Redis · Docker",
+      "Python · FastAPI · Qwen2.5-3B 4-bit + MLX LoRA · MLX-LM · MCP · Postgres/pgvector · Redis · Docker",
     arch: [
       [
         "摄入层",
@@ -277,11 +280,11 @@ const copy = {
         "抽取层",
         [
           <>
-            <code>Qwen2.5-7B</code> + QLoRA（Unsloth），1k 条对话→JSON 训练对
+            <code>Qwen2.5-3B-Instruct-4bit</code> + MLX LoRA，198 条 fit / 34 条训练侧 validation / 45 条按日期隔离 holdout
           </>,
           <>训练数据由托管 API 生成，再蒸馏到本地</>,
           <>
-            推理跑在本地 <code>vLLM</code>，schema 校验失败即重试
+            推理跑在本地 <code>mlx_lm.server</code>，schema 校验失败才重试
           </>,
         ],
       ],
@@ -300,11 +303,11 @@ const copy = {
       [
         "缓存层",
         [
-          <>进程内 LRU 挡重复 embedding 与重复召回</>,
+          <>进程内 LRU + Redis exact-key 缓存挡完全相同的查询</>,
           <>
-            <code>Redis</code> 语义缓存挡语义等价的请求
+            语义近邻缓存已实现并测量，但没有安全阈值，默认关闭
           </>,
-          <>相似度阈值在测试集上调，防误命中</>,
+          <>宁可多查一次向量，也不把另一个问题的答案返回给用户</>,
         ],
       ],
     ] as [string, ReactNode[]][],
@@ -330,7 +333,7 @@ const copy = {
       </>
     ),
     bookNote:
-      "留个邮箱，等日志解析和 MCP server 能跑本地 demo 时我发给你：docker compose 起服务、指向你自己的 transcript、看它生成第一张记忆卡。",
+      "本地 demo 已可运行：启动数据层与 MLX 服务，指向你自己的 transcript，看它生成记忆卡并通过 MCP 召回。留个邮箱预约 walkthrough。",
     emailLabel: "邮箱",
     emailPlaceholder: "you@company.com",
     roleLabel: "你的身份（选填）",
@@ -355,7 +358,7 @@ const copy = {
       "MindBridge parses the transcripts your local AI coding tools already write, turns each day into a memory card, and serves the same store to any MCP client. Parsing and storage are local by default.",
     nav: ["Two capture paths", "Architecture", "Metrics"],
     demo: "Open the diary",
-    stage: "In progress · backend landing in stages",
+    stage: "Local loop verified · public site uses labelled sample data",
     heroNote: "You already told an AI. You should not have to say it twice.",
     title: (
       <>
@@ -424,12 +427,12 @@ const copy = {
     localNote:
       "Parsing and storage are local: it reads transcripts on your machine and writes to a local Postgres.",
     extractorNote:
-      "One exception, stated plainly: turning a day into prose currently calls a hosted API, which sends that day's excerpts off the machine. It is an explicit opt-in and off by default — without it you get the locally computed counts. That step comes home once the tuned model runs on local vLLM.",
+      "The local path now works end to end: a Qwen2.5-3B MLX LoRA model turns transcript excerpts into schema-valid JSON on this Mac, then the shared MemoryService writes T2/T3. Hosted extraction remains an explicit training-data option and sends excerpts only with --send-to-provider.",
     coverage:
       "Stated plainly: Path A only works for tools that already write structured local logs (Claude Code, Codex CLI). Path B works with any MCP client. ChatGPT and web Claude expose no history API — those need a manual export and are out of scope for the automatic path.",
     archTitle: "Architecture",
     archNote:
-      "Python · FastAPI · Qwen2.5-7B + QLoRA · vLLM · MCP · Postgres/pgvector · Redis · Docker",
+      "Python · FastAPI · Qwen2.5-3B 4-bit + MLX LoRA · MLX-LM · MCP · Postgres/pgvector · Redis · Docker",
     arch: [
       [
         "Ingest",
@@ -447,11 +450,11 @@ const copy = {
         "Extraction",
         [
           <>
-            <code>Qwen2.5-7B</code> + QLoRA (Unsloth) on 1k dialogue→JSON pairs
+            <code>Qwen2.5-3B-Instruct-4bit</code> + MLX LoRA on 198 fit / 34 training-side validation / 45 date-isolated holdout pairs
           </>,
           <>Training data generated through a hosted API, then distilled local</>,
           <>
-            Inference on local <code>vLLM</code>, retried on schema failure
+            Inference through local <code>mlx_lm.server</code>, retried only on schema failure
           </>,
         ],
       ],
@@ -471,11 +474,11 @@ const copy = {
       [
         "Caching",
         [
-          <>In-process LRU for repeated embeddings and recalls</>,
+          <>In-process LRU + Redis exact-key caching for identical queries</>,
           <>
-            <code>Redis</code> semantic cache for semantically equal requests
+            Semantic neighbour caching is implemented and measured, but disabled
           </>,
-          <>Thresholds tuned on a test set to stop false hits</>,
+          <>One extra vector search is safer than answering a different question</>,
         ],
       ],
     ] as [string, ReactNode[]][],
@@ -501,7 +504,7 @@ const copy = {
       </>
     ),
     bookNote:
-      "Leave an email and I will send an invite once the log parser and MCP server run as a local demo: docker compose up, point it at your own transcripts, watch the first card get written.",
+      "The local demo now runs: start the data layer and MLX service, point it at your transcripts, watch a card get written and recalled over MCP. Leave an email to book a walkthrough.",
     emailLabel: "Email",
     emailPlaceholder: "you@company.com",
     roleLabel: "Your role (optional)",

@@ -49,7 +49,7 @@ const copy = {
       `真实数据：${cards} 张日记卡由 Path A 从本机 transcript 解析生成，T1 有 ${turns} 轮记录、T3 有 ${memories} 条长期偏好。` +
       (prose > 0
         ? `其中 ${prose} 张已由 M2 写成散文（卡片上标了模型名，规则计数仍保留在下方）；其余是规则计数。`
-        : "卡片内容是规则算出来的计数，不是模型写的散文 —— 叙述与偏好抽取要等 M2。"),
+        : "这些卡片目前只有规则计数；本地 M2 可按需补写叙述与偏好。"),
     offlineBanner: (base: string) =>
       `连不上后端（${base}），下面显示的是固定示例数据。本机跑 docker compose up -d api 之后刷新即可看到真实卡片。`,
     loadingBanner: "正在读取后端…",
@@ -63,12 +63,12 @@ const copy = {
     cardMetaSample: "示例",
     items: "今天发生了什么",
     wrote: "当天写入的偏好",
-    noWrote: "当天没有新偏好写入 —— 偏好靠 MCP 客户端调用 upsert_preference 写进来，Path A 只算事实。",
+    noWrote: "这一天没有 T3 写入；偏好可由 MCP 客户端主动写入，也可由本地 M2 在抽取时写入。",
     behaviour: "行为观察",
     behaviourNote: "只陈述可观测的行为，不做情绪判断。",
     timeline: "记忆时间轴",
     timelineNote: "点上面的偏好标签可以定位到对应记录",
-    emptyMemories: "T3 还没有长期偏好。Path A 不产出偏好，需要 MCP 客户端写入或等 M2 抽取。",
+    emptyMemories: "截至这一天还没有 T3 长期偏好；之后学到的记忆不会倒灌进过去的时间轴。",
     stale: "已被取代",
     open: "valid_at 未关闭",
     underneath: "看底层",
@@ -96,7 +96,7 @@ const copy = {
       `Live data: ${cards} day card(s) written by Path A from transcripts on this machine, ${turns} turns in T1 and ${memories} long-term preference(s) in T3. ` +
       (prose > 0
         ? `${prose} of them have M2 prose (the card names the model, and the rule-based count stays below it); the rest are counts.`
-        : "Card contents are rule-based counts, not model-written prose — narration and preference extraction wait for M2."),
+        : "These cards currently hold rule-based counts; local M2 can add narrative and preferences on demand."),
     offlineBanner: (base: string) =>
       `Backend unreachable at ${base}, so this is fixed sample data. Run docker compose up -d api locally and reload to see the real cards.`,
     loadingBanner: "Reading the backend…",
@@ -111,13 +111,13 @@ const copy = {
     items: "What happened",
     wrote: "Preferences written that day",
     noWrote:
-      "No preference written that day — those arrive when an MCP client calls upsert_preference. Path A only computes facts.",
+      "No T3 write is attributed to this day. Preferences can arrive through an MCP client or the local M2 extraction pass.",
     behaviour: "Behavioural note",
     behaviourNote: "Observable behaviour only — no emotional inference.",
     timeline: "Memory timeline",
     timelineNote: "Tap a preference above to locate its record",
     emptyMemories:
-      "T3 holds no long-term preferences yet. Path A does not produce them; they need an MCP client write, or M2 extraction.",
+      "T3 held no long-term preferences as of this day; memories learned later are not backdated into the timeline.",
     stale: "superseded",
     open: "valid_at open",
     underneath: "Look underneath",
@@ -697,8 +697,8 @@ export function MemoryConsole() {
               <p className="empty">
                 <Moon weight="fill" style={{ width: 12, height: 12 }} />{" "}
                 {zh
-                  ? "Path A 由 docker compose run --rm ingest 触发，尚未接定时任务。卡片里的轮次是当次解析的计数，这里是 T1 现在的行数 —— 后续再跑一次 ingest 两者就会有差。"
-                  : "Path A runs via docker compose run --rm ingest; no scheduler yet. The card's turn count is from the run that wrote it, while this is the current row count in T1 — a later ingest makes them differ."}
+                  ? "Path A 可手动运行，也可选择安装 nightly scheduler。卡片里的轮次是写卡时的计数，这里是 T1 当前行数 —— 后续 ingest 会让两者出现差异。"
+                  : "Path A can run manually or through the opt-in nightly scheduler. The card keeps the count from when it was written; this panel shows current T1 rows, so a later ingest can make them differ."}
               </p>
             </section>
           </div>
