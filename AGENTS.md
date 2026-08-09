@@ -29,15 +29,18 @@ In practice:
 
 | fact | value | n | where |
 | --- | --- | --- | --- |
-| Teacher first-attempt schema compliance | **81.4%** | 86 | Sonnet via claude-cli, unconstrained |
-| Teacher compliance with repair loop | 100% | 86 | same |
+| **Teacher first-attempt schema compliance** | **84%** | **277** | current bar; `extract.runner --stats` |
+| Same, earlier smaller sample | 81.4% | 86 | superseded — kept so older commits read correctly |
+| Teacher compliance with repair loop | 100% | 86 | same run |
 | T3 dedup threshold under nomic-embed-text | **0.80** | 170 rows read individually | `api/settings.py` |
-| Teacher first-attempt compliance, larger sample | **84%** | 277 | supersedes the 81.4% row above |
 | Semantic query cache viability | **not viable** | 27 queries / 54 requests | `cacheCostSaving` stays null |
 
-81.4% is the bar stage two's fine-tuned model must clear, judged by the same
-rule: **first reply only, repairs excluded.** Changing that definition to make a
-number look better invalidates the comparison the whole project rests on.
+**84% (n=277) is the bar** stage two's fine-tuned model must clear, judged by the
+same rule: **first reply only, repairs excluded.** Changing that definition to
+make a number look better invalidates the comparison the whole project rests on.
+
+The figure rose from 81.4% as the sample grew; quote it with its n, and re-read
+it from `--stats` rather than copying it from here.
 
 ## Traps in the data — each of these was a real bug
 
