@@ -30,6 +30,8 @@ In practice:
 | fact | value | n | where |
 | --- | --- | --- | --- |
 | **Teacher first-attempt schema compliance** | **84%** | **277** | current bar; `extract.runner --stats` |
+| **Local 3B MLX first-attempt compliance** | **86.7%** | **45 seeded holdout prompts** | `evals/mlx_holdout_seed_3407.json` |
+| Teacher on the same seeded holdout | 82.2% | 45 | `evals/mlx_holdout_seed_3407.json` |
 | Same, earlier smaller sample | 81.4% | 86 | superseded — kept so older commits read correctly |
 | Teacher compliance with repair loop | 100% | 86 | same run |
 | T3 dedup threshold under nomic-embed-text | **0.80** | 170 rows read individually | `api/settings.py` |
@@ -40,7 +42,11 @@ same rule: **first reply only, repairs excluded.** Changing that definition to
 make a number look better invalidates the comparison the whole project rests on.
 
 The figure rose from 81.4% as the sample grew; quote it with its n, and re-read
-it from `--stats` rather than copying it from here.
+it from `--stats` rather than copying it from here. The local model cleared the
+bar on the fixed 45-prompt holdout (39 valid versus the teacher's 37), but that
+two-prompt difference is not evidence of statistical superiority. Thirteen
+prompts were truncated to the 4096-token context limit. Keep the public metric
+in progress while the adapter and its training data remain private artifacts.
 
 ## Traps in the data — each of these was a real bug
 

@@ -1,0 +1,21 @@
+{
+  "_comment": "Public, transcript-free summary of the full MLX holdout run. Re-run the command field for per-row detail.",
+  "command": ".venv/bin/python -m train.eval_mlx --model mlx-community/Qwen2.5-3B-Instruct-4bit --adapter train/outputs/mlx-adapters --seed 3407 --out train/outputs/mlx-adapters/holdout-eval-seed-3407.json",
+  "model": "mlx-community/Qwen2.5-3B-Instruct-4bit",
+  "adapter": "train/outputs/mlx-adapters",
+  "seed": 3407,
+  "temperature": 0.2,
+  "max_prompt_tokens": 4096,
+  "pairs": 45,
+  "first_attempt_valid": 39,
+  "extraction_json_accuracy": "86.7%",
+  "teacher_first_attempt_valid_same_pairs": 37,
+  "teacher_accuracy_same_pairs": "82.2%",
+  "prompts_truncated": 13,
+  "wall_seconds": 845.7,
+  "failures": {
+    "invalid_json_or_unclosed_output": 4,
+    "open_threads_over_schema_limit": 1,
+    "highlights_over_schema_limit": 1
+  }
+}

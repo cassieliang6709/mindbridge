@@ -128,6 +128,8 @@ services:
       MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
       MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}
       MINDBRIDGE_GEMINI_API_KEY: ${MINDBRIDGE_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}
+      MINDBRIDGE_MLX_URL: ${MINDBRIDGE_MLX_URL:-http://host.docker.internal:8080/v1}
+      MINDBRIDGE_MLX_MODEL: ${MINDBRIDGE_MLX_MODEL:-mlx-community/Qwen2.5-3B-Instruct-4bit}
     volumes:
       - ./api:/app/api
       - ./ingest:/app/ingest

@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     embedding_timeout_seconds: float = 30.0
 
+    # --- local extraction -------------------------------------------------
+    mlx_url: str = Field(
+        default="http://127.0.0.1:8080/v1",
+        description="OpenAI-compatible base URL exposed by mlx_lm.server.",
+    )
+    mlx_model: str = Field(
+        default="mlx-community/Qwen2.5-3B-Instruct-4bit",
+        description="Base-model label recorded on locally extracted cards.",
+    )
+    mlx_timeout_seconds: float = 180.0
+
     # --- memory behaviour -------------------------------------------------
     session_buffer_window: int = Field(
         default=12,

@@ -12,10 +12,13 @@ from __future__ import annotations
 import asyncio
 import json
 
+import httpx
+
 from .pipeline import extract_day, training_pair
 from .prompts import build_day_input
 from .providers import (
     Message,
+    MLXChatProvider,
     ScriptedProvider,
     _claude_cli_input_tokens,
     _claude_cli_messages,
@@ -117,6 +120,28 @@ async def main() -> int:
         )
         == 1002,
     )
+
+    print("\nMLX server adapter")
+
+    async def mlx_response(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert request.url.path == "/v1/chat/completions"
+        assert payload["model"] == "default_model"
+        assert payload["messages"][0]["role"] == "system"
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps(VALID)}}],
+                "usage": {"prompt_tokens": 123, "completion_tokens": 45},
+            },
+        )
+
+    mlx = MLXChatProvider(transport=httpx.MockTransport(mlx_response))
+    completion = await mlx.complete(
+        [Message("system", "return JSON"), Message("user", "summarise today")]
+    )
+    ok &= check("local endpoint response returned", json.loads(completion.text) == VALID)
+    ok &= check("local token usage preserved", completion.input_tokens == 123)
 
     print("\nrepair loop")
 

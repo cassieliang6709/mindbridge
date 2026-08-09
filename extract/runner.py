@@ -7,6 +7,9 @@
     python -m extract.runner --date 2026-08-04 --provider claude-cli \
         --send-to-provider
 
+    # extract with the fine-tuned MLX adapter served on this Mac (fully local)
+    python -m extract.runner --date 2026-08-04 --provider mlx
+
     # every card that has no narrative yet, newest first
     python -m extract.runner --missing --limit 5
 
@@ -108,12 +111,12 @@ async def run(args: argparse.Namespace) -> int:
 
         provider = None
         if not args.dry_run:
-            # Path A and Path B never leave the machine. This step does, so it
-            # is gated on an explicit flag rather than a default. Excerpts of
-            # real conversations — file paths, project names, whatever was
-            # discussed — go to a third party and may be retained under their
-            # policy. Stage two removes this by running the tuned model locally.
-            if not args.send_to_provider:
+            # Path A and Path B never leave the machine. Hosted M2 providers do,
+            # so they are gated on an explicit flag rather than a default.
+            # Excerpts of real conversations — file paths, project names,
+            # whatever was discussed — go to a third party and may be retained
+            # under its policy. MLX instead serves the tuned model locally.
+            if args.provider != "mlx" and not args.send_to_provider:
                 print(
                     "REFUSING TO SEND.\n\n"
                     f"Extraction would send excerpts of your transcripts to the "
@@ -145,12 +148,23 @@ async def run(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
                 return 3
-            provider = build_provider(args.provider, key, args.model)
+            provider = build_provider(
+                args.provider,
+                key,
+                args.model or (settings.mlx_model if args.provider == "mlx" else None),
+                base_url=args.base_url or (
+                    settings.mlx_url if args.provider == "mlx" else None
+                ),
+                timeout=(
+                    settings.mlx_timeout_seconds if args.provider == "mlx" else None
+                ),
+            )
 
         default_models = {
             "openai": "gpt-4o-mini",
             "gemini": "gemini-2.5-flash",
             "claude-cli": "sonnet",
+            "mlx": settings.mlx_model,
         }
         model_name = args.model or default_models[args.provider]
         estimated_input = 0
@@ -168,8 +182,11 @@ async def run(args: argparse.Namespace) -> int:
                 print(f"{label}: already has a narrative (use --force to redo)")
                 continue
 
+            max_input_tokens = args.max_input_tokens
+            if max_input_tokens is None:
+                max_input_tokens = 4_000 if args.provider == "mlx" else 12_000
             day = build_day_input(
-                date, facts, turns, max_input_tokens=args.max_input_tokens
+                date, facts, turns, max_input_tokens=max_input_tokens
             )
             estimated_input += day.estimated_tokens()
 
@@ -285,10 +302,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--provider",
-        choices=["openai", "gemini", "claude-cli"],
+        choices=["openai", "gemini", "claude-cli", "mlx"],
         default="openai",
     )
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible base URL for --provider mlx.",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -306,7 +328,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Re-extract a day that already has prose."
     )
     parser.add_argument("--max-attempts", type=int, default=3)
-    parser.add_argument("--max-input-tokens", type=int, default=12_000)
+    parser.add_argument(
+        "--max-input-tokens",
+        type=int,
+        default=None,
+        help="Prompt budget. Defaults to 4,000 for MLX and 12,000 otherwise.",
+    )
     parser.add_argument(
         "--min-confidence",
         type=float,

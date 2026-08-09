@@ -3,7 +3,8 @@
 A long-term memory engine for LLMs, packaged as something a person actually
 uses: it parses the transcripts your local AI coding tools already write, turns
 each day into one memory card, and serves the same store to any MCP client.
-Nothing leaves your machine.
+Parsing, storage and the MLX extraction path stay on your machine. Hosted
+extraction remains available as an explicit opt-in for generating training data.
 
 [Live site](https://mindbridge-demo-psi.vercel.app) ·
 [Diary](https://mindbridge-demo-psi.vercel.app/demo)
@@ -45,8 +46,9 @@ with a partial one, so a nightly job would shrink every card it touched.
 
 ## Current state
 
-The front end and the M1/M3 backend are built. Ingestion and the local
-extractor are not. Nothing in this repo pretends otherwise:
+The front end, ingestion, memory service and local extraction loop are built.
+The deployed site still uses sample data because the database and model live on
+one Mac; it labels that state instead of presenting the sample as live.
 
 | Piece | State |
 | --- | --- |
@@ -58,8 +60,9 @@ extractor are not. Nothing in this repo pretends otherwise:
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `/demo` wired to the API, with an offline fallback | done |
 | Nightly scheduler for Path A (launchd, opt-in) | done |
-| `train/` — dialogue-pair generation, QLoRA fine-tune (M2) | not started |
-| Semantic cache with threshold matching (M5) | not started |
+| `train/` — 3B 4-bit MLX LoRA training and holdout evaluation (M2) | working locally |
+| Local MLX HTTP provider → T2/T3 → API/Diary/MCP | working locally |
+| Semantic query cache experiment (M5) | measured unsafe; disabled |
 
 The diary at `/demo` now reads the backend through `/api/diary`. When the API is
 reachable it renders real cards, real T1 turns and the real T3 timeline, and the
@@ -69,11 +72,11 @@ banner amber, and names the unreachable URL. The distinction is carried in the
 payload's `source` field rather than inferred from a failed request, so sample
 rows can never be presented as if they came from Postgres.
 
-A limit is by design: Path A produces **rule-based** day cards — counts,
-tool tallies, time spans, git branches. It does not narrate a day in prose or
-extract durable preferences from it, because both need the M2 local extractor.
-Preferences therefore still arrive only through Path B, i.e. a model deciding to
-call `upsert_preference`.
+Path A first produces a reproducible **rule-based** day card — counts, tool
+tallies, time spans and git branches. The optional local MLX pass adds narrative
+and durable preferences, while keeping the rule-based facts beneath it. Those
+preferences use the same `MemoryService` write path as MCP, so extraction and an
+agent call cannot implement different dedup behaviour.
 
 The default embedder is a **deterministic hashing fallback**: offline, no key,
 and lexical-only. It exists so the stack boots and the mechanical tests run
@@ -183,10 +186,11 @@ An incremental run takes about seven seconds on an already-ingested corpus.
 
 ## M2 — turning a day into a diary
 
-Stage one uses a hosted provider. It can call OpenAI/Gemini with an API key, or
-reuse an existing Claude Code sign-in without copying a key into MindBridge.
-Stage two replaces it with a fine-tuned model running locally; the code is
-written, the fine-tune is not run.
+Stage one can use OpenAI, Gemini or an existing Claude Code sign-in to produce
+validated training pairs. That hosted path requires an explicit send flag.
+Stage two is now available locally: `mlx_lm.server` loads the fine-tuned
+Qwen2.5-3B 4-bit adapter, and `extract.runner --provider mlx` calls its
+OpenAI-compatible endpoint without an API key or send flag.
 
 ```bash
 # see the exact prompt and what it would cost — no key needed, sends nothing
@@ -201,6 +205,15 @@ docker compose run --rm extract --missing --limit 5 --send-to-provider
 uv run --with-requirements requirements.txt python -m extract.runner \
     --date 2026-08-04 --provider claude-cli --send-to-provider
 
+# local model service — the adapter stays on this Mac
+.venv/bin/mlx_lm.server \
+    --model mlx-community/Qwen2.5-3B-Instruct-4bit \
+    --adapter-path train/outputs/mlx-adapters \
+    --host 127.0.0.1 --port 8080 --max-tokens 1200 --temp 0.2
+
+# in another terminal: transcript → schema JSON → T2 narrative + T3 preferences
+.venv/bin/python -m extract.runner --missing --limit 1 --provider mlx
+
 # cumulative schema-compliance figures
 docker compose run --rm extract --stats
 
@@ -209,11 +222,11 @@ docker compose run --rm --no-deps --entrypoint python extract \
     -m extract.test_pipeline
 ```
 
-**This step sends data off the machine.** Path A and Path B are local; hosted
-extraction is not. It transmits that day's transcript excerpts, so it is gated
-behind `--send-to-provider` and refuses to run without it. `--dry-run` prints
-byte-for-byte what would be sent. Stage two removes the exposure by serving the
-tuned model locally.
+**Only the hosted providers send data off the machine.** OpenAI, Gemini and
+Claude Code CLI transmit that day's excerpts, so they are gated behind
+`--send-to-provider`. `--dry-run` prints byte-for-byte what would be sent. The
+`mlx` provider talks only to `127.0.0.1` by default and deliberately does not
+require that flag.
 
 Compliance is reported two ways and the difference matters: `first_attempt_rate`
 is how often the model returned a schema-valid object *without* correction, and
@@ -225,12 +238,16 @@ narrative that infers an emotional state ("you seemed frustrated"), and rejects
 a one-off task masquerading as a durable preference — a model drifts into all
 three, and a prompt alone does not stop it.
 
-### Stage two
+### Training and evaluation on Apple silicon
 
 ```bash
-python -m train.prepare_dataset --report      # readiness and the split
-python -m train.train_qlora --epochs 2        # on a rented CUDA GPU, not a Mac
-python -m train.eval_holdout --model ... --write-results
+python -m train.prepare_dataset --report
+python -m train.train_mlx \
+    --model mlx-community/Qwen2.5-3B-Instruct-4bit
+python -m train.eval_mlx \
+    --model mlx-community/Qwen2.5-3B-Instruct-4bit \
+    --adapter train/outputs/mlx-adapters --seed 3407 \
+    --out train/outputs/mlx-adapters/holdout-eval.json
 ```
 
 The split is by date and deterministic, so a day's pairs never straddle
@@ -280,14 +297,15 @@ omission caused 17 of 19 failures.
 
 | what | value | n | how |
 | --- | --- | --- | --- |
-| Teacher first-attempt schema compliance | **81.4%** | 86 | Sonnet via claude-cli, unconstrained; `--stats` |
-| Teacher eventual compliance (with repair) | 100% | 86 | same |
+| Teacher first-attempt schema compliance | **84%** | 277 | Sonnet via claude-cli; `--stats` |
+| Teacher on the date-isolated local holdout | **82.2%** | 45 | captured first-attempt flags |
+| Qwen2.5-3B MLX LoRA pilot | **86.7%** | 45 | seed 3407; repairs excluded; `evals/mlx_holdout_seed_3407.json` |
 
-81.4% is the bar stage two's fine-tuned model has to clear, judged by the same
-rule (first reply only, repairs excluded). Two prompt versions sit inside it —
-v1 83%, v2 80% — and the difference is noise: v2 added an explicit instruction
-about the `confidence` field, and it did not help. The model drops that field on
-roughly one call in five regardless, which is variance rather than a prompt gap.
+The 84% teacher figure is the broad baseline. The 45-pair comparison is the
+like-for-like one because both models see the same held-out dates. The local
+pilot is reproducible and encouraging, not a claim of statistical superiority:
+39 valid replies versus 37 is a two-case difference, and 13 prompts required
+the same 4,096-token truncation used during training.
 
 ## Rebuilding the database from scratch
 
@@ -324,16 +342,34 @@ semantic provider is configured.
 | Superseded-record isolation | no | `evals/eval_memory_engine.py` |
 | Write-time dedup accuracy | yes | `evals/eval_memory_engine.py` |
 | Per-turn prompt token reduction | yes | `evals/eval_memory_engine.py` |
-| Preference-extraction JSON validity | yes | not written (M2) |
-| Extraction API cost delta | yes | not written (M2) |
-| Cost saved by the semantic cache | yes | not written (M5) |
+| Preference-extraction JSON validity | yes | `train/eval_mlx.py` (local evidence; public metric still null) |
+| Extraction API cost delta | yes | not yet measured on a deployable serving target |
+| Cost saved by the semantic cache | yes | measured unsafe; remains null and disabled |
 
 "Time-decay scoring correctness" stores identical content at several ages and
 checks both newest-first ordering and that every score matches
 `cosine · exp(-λ·Δt)` to within 1e-6. It is a formula check, not a claim about
 retrieval quality — the table on the site says so too.
 
-## Planned architecture
+### Why semantic query caching stays off
+
+An exact-key cache is safe and remains enabled. The semantic-neighbour path is
+implemented but failed its own acceptance test under `nomic-embed-text`:
+
+- an unrelated short-query pair scored cosine **0.9992**;
+- the one true cacheable paraphrase pair scored only **0.9064**;
+- only **1 of 35** same-intent query pairs retrieved identical memory ids;
+- the least-bad threshold still produced a **50% false-hit rate**.
+
+No threshold separates the positive and negative populations. Raising it drops
+the true paraphrase; lowering it serves another question's cached answer. A
+miss costs one vector search, while a false hit returns the wrong memory, so the
+measured result is `cache_semantic_enabled=false`, not a manufactured savings
+number. This does not invalidate the 0.80 write-dedup threshold: dedup compares
+long stored statements, while cache keys are short queries with much less
+discriminating signal.
+
+## Implemented architecture
 
 ```
 jsonl / MCP → T1 buffer → extract → cosine dedup → pgvector
@@ -343,12 +379,14 @@ jsonl / MCP → T1 buffer → extract → cosine dedup → pgvector
 
 - **Ingest** — incremental `jsonl` parsing split by session; FastAPI endpoints
   for sessions, preferences, and recall; one nightly batch writes the card.
-- **Extraction** — Qwen2.5-7B tuned with QLoRA (Unsloth) on ~1k dialogue→JSON
-  pairs, served from local vLLM, retried on schema failure.
+- **Extraction** — Qwen2.5-3B-Instruct-4bit tuned with MLX LoRA on 198 fit rows
+  (34 training-side validation rows; 45 date-isolated holdout rows), served by
+  `mlx_lm.server` on the Mac and retried only after a schema failure.
 - **Storage** — T1 session buffer, T2 rolling summary, T3 pgvector with time
   decay over `created_at` / `valid_at`.
-- **Caching** — in-process LRU plus a Redis semantic cache, thresholds tuned on
-  a test set to avoid false hits.
+- **Caching** — bounded in-process LRU plus Redis exact-key caching. Semantic
+  neighbour matching is implemented but off: unrelated short questions scored
+  0.9992, above the 0.9064 true paraphrase, so no tested threshold was safe.
 
 ## Developer-preview signups
 
@@ -388,4 +426,6 @@ keyed by locale (`zh` / `en`); technical identifiers stay English in both.
 **Front end** — Next.js, React, TypeScript, CSS.
 **Backend** — Python 3.11, FastAPI, asyncpg, Postgres 16 + pgvector, Redis,
 the MCP Python SDK, Docker Compose.
-**Planned** — Unsloth/QLoRA and vLLM for the local extractor (M2).
+**Local model** — Qwen2.5-3B-Instruct-4bit, MLX LoRA, `mlx_lm.server`.
+**Roadmap, not shipped** — export to a portable CUDA/vLLM serving target if the
+local pilot ever needs to run away from Apple silicon.

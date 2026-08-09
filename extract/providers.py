@@ -141,6 +141,55 @@ class GeminiChatProvider:
         )
 
 
+class MLXChatProvider:
+    """Call a local ``mlx_lm.server`` over its OpenAI-compatible endpoint."""
+
+    name = "mlx"
+
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:8080/v1",
+        model: str = "mlx-community/Qwen2.5-3B-Instruct-4bit",
+        timeout: float = 180.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.model = model
+        self._url = f"{base_url.rstrip('/')}/chat/completions"
+        self._timeout = timeout
+        self._transport = transport
+
+    async def complete(self, messages: list[Message]) -> Completion:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, transport=self._transport
+        ) as client:
+            response = await client.post(
+                self._url,
+                json={
+                    # mlx_lm.server maps this alias to the model and adapter
+                    # selected when the process started. ``self.model`` is the
+                    # truthful model label recorded on the resulting T2 card.
+                    "model": "default_model",
+                    "messages": [
+                        {"role": message.role, "content": message.content}
+                        for message in messages
+                    ],
+                    # Keep decoding unconstrained so first-attempt schema
+                    # compliance remains comparable to the hosted teacher.
+                    "temperature": 0.2,
+                    "max_tokens": 1200,
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+        usage = payload.get("usage") or {}
+        return Completion(
+            text=payload["choices"][0]["message"]["content"],
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+        )
+
+
 def _claude_cli_messages(messages: list[Message]) -> tuple[str, str]:
     """Split chat messages into Claude CLI's system prompt and stdin prompt."""
     system = "\n\n".join(
@@ -277,7 +326,12 @@ class ScriptedProvider:
 
 
 def build_provider(
-    kind: str, api_key: str | None, model: str | None
+    kind: str,
+    api_key: str | None,
+    model: str | None,
+    *,
+    base_url: str | None = None,
+    timeout: float | None = None,
 ) -> ChatProvider:
     if kind == "openai":
         return OpenAIChatProvider(api_key or "", model or "gpt-4o-mini")
@@ -285,6 +339,12 @@ def build_provider(
         return GeminiChatProvider(api_key or "", model or "gemini-2.5-flash")
     if kind == "claude-cli":
         return ClaudeCodeCLIProvider(model or "sonnet")
+    if kind == "mlx":
+        return MLXChatProvider(
+            base_url or "http://127.0.0.1:8080/v1",
+            model or "mlx-community/Qwen2.5-3B-Instruct-4bit",
+            timeout or 180.0,
+        )
     raise ValueError(
-        f"unknown provider {kind!r}; use openai, gemini, or claude-cli"
+        f"unknown provider {kind!r}; use openai, gemini, claude-cli, or mlx"
     )

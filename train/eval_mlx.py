@@ -68,6 +68,12 @@ def main() -> int:
         help="Matches eval_holdout's temperature for the hosted teacher.",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=3407,
+        help="MLX sampling seed so the reported holdout run is reproducible.",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -90,9 +96,11 @@ def main() -> int:
     if args.limit:
         holdout = holdout[: args.limit]
 
+    import mlx.core as mx
     from mlx_lm import generate, load
     from mlx_lm.sample_utils import make_sampler
 
+    mx.random.seed(args.seed)
     adapter = None if args.baseline else args.adapter
     label = "base model" if adapter is None else f"adapter {adapter}"
     print(f"loading {args.model} ({label})")
@@ -193,6 +201,8 @@ def main() -> int:
                     "teacher_first_attempt_valid": teacher_count,
                     "max_prompt_tokens": args.max_prompt_tokens,
                     "prompts_truncated": truncated,
+                    "seed": args.seed,
+                    "temperature": args.temp,
                     "wall_seconds": round(wall, 1),
                     "per_row": results,
                 },

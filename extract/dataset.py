@@ -1,8 +1,8 @@
 """Append-only training set, plus the compliance stats over it.
 
 The file this writes is the deliverable of stage one: the (prompt, JSON) pairs
-that stage two fine-tunes Qwen2.5-7B on, and the per-attempt record that the
-91.5%-style compliance figure must be computed from.
+that stage two fine-tunes Qwen2.5-3B on, and the per-attempt record that every
+schema-compliance figure must be computed from.
 """
 
 from __future__ import annotations
