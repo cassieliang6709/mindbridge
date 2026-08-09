@@ -95,6 +95,65 @@ class Settings(BaseSettings):
     # --- cache ------------------------------------------------------------
     cache_enabled: bool = True
     cache_ttl_seconds: int = 300
+    cache_lru_size: int = Field(
+        default=128,
+        ge=0,
+        description=(
+            "Entries kept in the in-process LRU that sits in front of Redis. "
+            "Serves the identical query without a network round trip; bounded "
+            "so a long-running API process cannot grow without limit."
+        ),
+    )
+    cache_semantic_enabled: bool = Field(
+        default=False,
+        description=(
+            "Serve a cached temporal_query result to a *different* query whose "
+            "embedding is near a cached one. OFF by default, and that default "
+            "is a measurement rather than caution: see the `cache_semantic` "
+            "entry in evals/results.json. Under nomic-embed-text the two "
+            "unrelated questions '回复应该写得多详细' and '测试数据应该怎么准备' "
+            "score cosine 0.9992, above the 0.9064 of the one true paraphrase "
+            "pair in the set — so every threshold in the sweep, up to 0.99, "
+            "still produced false hits. Turn this on only after re-running "
+            "evals/eval_memory_engine.py under the embedder you actually "
+            "deploy and seeing a threshold with zero false hits."
+        ),
+    )
+    cache_semantic_threshold: float = Field(
+        default=0.95,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Cosine at or above which a cached query is treated as asking the "
+            "same thing. Deliberately NOT the 0.80 dedup threshold: that number "
+            "was read off stored preference *statements*, which are long. Cache "
+            "keys are *queries*, which are short, and nomic-embed-text is far "
+            "less discriminative on short text. This is a separate number that "
+            "needs its own evidence, and on the evidence there is no good "
+            "value: the sweep never reached zero false hits at any threshold "
+            "through 0.99. 0.95 is a deliberately conservative placeholder — "
+            "err high, as with dedup, because a missed hit costs one vector "
+            "search and a false hit answers the wrong question. It is why "
+            "cache_semantic_enabled is False rather than a setting to trust."
+        ),
+    )
+    cache_semantic_margin: float = Field(
+        default=0.02,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Ambiguity guard. If the runner-up cached query is within this "
+            "cosine of the best one, the neighbourhood is not discriminative "
+            "and the lookup refuses rather than guessing. This is what turns an "
+            "embedder collapse (several unrelated queries all at ~1.0) into a "
+            "cache miss instead of another question's memories."
+        ),
+    )
+    cache_semantic_index_size: int = Field(
+        default=256,
+        ge=1,
+        description="Most recent cached queries eligible for semantic matching.",
+    )
 
     def masked(self) -> dict[str, object]:
         """Settings safe to log or expose on /healthz."""
@@ -106,6 +165,8 @@ class Settings(BaseSettings):
             "decay_rate_per_day": self.decay_rate_per_day,
             "dedup_threshold": self.dedup_threshold,
             "cache_enabled": self.cache_enabled,
+            "cache_semantic_enabled": self.cache_semantic_enabled,
+            "cache_semantic_threshold": self.cache_semantic_threshold,
         }
 
 

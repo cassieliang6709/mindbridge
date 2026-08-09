@@ -206,23 +206,59 @@ class MemoryService:
         return turns, total
 
     async def temporal_query(
-        self, request: TemporalQueryRequest
+        self,
+        request: TemporalQueryRequest,
+        trace: dict[str, object] | None = None,
     ) -> TemporalQueryResult:
-        cache_key = QueryCache.key(
-            _QUERY_NAMESPACE,
-            {
-                "q": request.query_string.strip().lower(),
-                "k": request.top_k,
-                "w": request.time_window_days,
-                "c": sorted(request.categories) if request.categories else None,
-                "s": request.include_superseded,
-            },
-        )
+        """Three-layer read: LRU -> exact key -> semantic neighbour -> Postgres.
+
+        `trace`, if given, is filled with which layer answered and why. Nothing
+        in the product path passes it; evals/eval_memory_engine.py does, because
+        a semantic cache cannot be evaluated on its hit rate alone — the
+        interesting number is how often it served the *wrong* question, and that
+        needs the similarity and the query it matched against.
+        """
+        # Everything except the query text. Semantic matching may be fuzzy about
+        # the question; it must never be fuzzy about these, because they decide
+        # what a result contains rather than what it is about.
+        params = {
+            "k": request.top_k,
+            "w": request.time_window_days,
+            "c": sorted(request.categories) if request.categories else None,
+            "s": request.include_superseded,
+        }
+        normalised_query = request.query_string.strip().lower()
+        cache_key = QueryCache.key(_QUERY_NAMESPACE, {"q": normalised_query, **params})
+        fingerprint = QueryCache.fingerprint(params)
+
         cached = await self.cache.get(cache_key)
         if cached is not None:
+            if trace is not None:
+                trace["layer"] = "exact"
             return TemporalQueryResult.model_validate({**cached, "cache_hit": True})
 
+        # From here on the embedding has already been paid for. A semantic hit
+        # therefore saves the vector search, not the embedding call — the
+        # cost model in the eval says so explicitly rather than implying that a
+        # semantic hit is as cheap as an exact one.
         [embedding] = await self.embedder.embed([request.query_string])
+
+        lookup = await self.cache.get_semantic(
+            _QUERY_NAMESPACE, fingerprint, embedding
+        )
+        if trace is not None:
+            trace["semantic_outcome"] = lookup.outcome
+            trace["semantic_similarity"] = lookup.best_similarity
+            trace["semantic_runner_up"] = lookup.runner_up_similarity
+            trace["semantic_matched_query"] = lookup.matched_query
+            trace["semantic_candidates"] = lookup.candidates
+        if lookup.value is not None:
+            if trace is not None:
+                trace["layer"] = "semantic"
+            return TemporalQueryResult.model_validate(
+                {**lookup.value, "cache_hit": True, "query": request.query_string}
+            )
+
         hits = await self.vectors.search(
             embedding,
             top_k=request.top_k,
@@ -237,7 +273,13 @@ class MemoryService:
             cache_hit=False,
             context_block=format_context(hits),
         )
-        await self.cache.set(cache_key, result.model_dump(mode="json"))
+        payload = result.model_dump(mode="json")
+        await self.cache.set(cache_key, payload)
+        await self.cache.index_semantic(
+            _QUERY_NAMESPACE, cache_key, normalised_query, fingerprint, embedding
+        )
+        if trace is not None:
+            trace["layer"] = "miss"
         return result
 
 

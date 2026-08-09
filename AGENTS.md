@@ -32,6 +32,8 @@ In practice:
 | Teacher first-attempt schema compliance | **81.4%** | 86 | Sonnet via claude-cli, unconstrained |
 | Teacher compliance with repair loop | 100% | 86 | same |
 | T3 dedup threshold under nomic-embed-text | **0.80** | 170 rows read individually | `api/settings.py` |
+| Teacher first-attempt compliance, larger sample | **84%** | 277 | supersedes the 81.4% row above |
+| Semantic query cache viability | **not viable** | 27 queries / 54 requests | `cacheCostSaving` stays null |
 
 81.4% is the bar stage two's fine-tuned model must clear, judged by the same
 rule: **first reply only, repairs excluded.** Changing that definition to make a
@@ -64,6 +66,22 @@ a 683-turn card as a 223-turn one. This is why `session_turns` persists
 **Day cards and session cards share one table.** Every read states a scope
 (`/summaries?scope=day|session|all`, default `day`). Without it the diary's day
 list fills with hundreds of session rows.
+
+**nomic-embed-text collapses on short queries.** Two unrelated questions —
+`回复应该写得多详细` and `测试数据应该怎么准备` — score cosine **0.9992**, above a
+genuine paraphrase pair at 0.9064. Negatives sit above positives, so no
+threshold separates them and a semantic *query* cache cannot be made safe with
+this model. Measured over 27 queries in 8 adjacent intent groups; the best point
+(0.90) still had a 50% false-hit rate.
+
+This does **not** impugn the 0.80 dedup threshold. Dedup compares long stored
+*statements*, where the model behaves; the cache compares short *queries*, which
+is the regime where it degrades. Two different populations, two different
+numbers — do not copy one to the other.
+
+Deeper ceiling: only 1 of 35 same-intent query pairs retrieved the same rows at
+all. Retrieval is not stable across paraphrases, so the thing a query cache
+would cache is not stable either.
 
 ## Embeddings and dedup
 

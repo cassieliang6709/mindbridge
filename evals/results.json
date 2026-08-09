@@ -1,14 +1,16 @@
 {
   "_comment": "Written by evals/eval_memory_engine.py. Every value must come from a reproducible run; null renders as an in-progress badge on the landing page rather than a number. Headline metrics stay null unless the run used a real semantic embedder.",
-  "generatedAt": "2026-08-06T05:21:50+00:00",
-  "commit": "eaf91aa",
+  "generatedAt": "2026-08-09T03:18:18+00:00",
+  "commit": "fd4229e",
   "environment": {
     "embedder": "ollama",
     "semantic_embedder": true,
     "embedding_dim": 768,
     "tokenizer": "cl100k_base",
     "decay_rate_per_day": 0.01,
-    "dedup_threshold": 0.8
+    "dedup_threshold": 0.8,
+    "cache_semantic_enabled": false,
+    "cache_semantic_threshold": 0.95
   },
   "metrics": {
     "promptTokenReduction": "16%",
@@ -83,7 +85,7 @@
           365.0
         ],
         "newest_first": true,
-        "formula_max_abs_error": 1.2e-09,
+        "formula_max_abs_error": 1.9e-09,
         "formula_holds": true,
         "rows": [
           {
@@ -171,6 +173,299 @@
             "action": "inserted",
             "similarity": 0.6139,
             "auto_superseded": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "cache_semantic",
+      "value": 7.4,
+      "unit": "percent",
+      "note": "Ground truth is objective: two queries are the same request iff a fresh query returns the same memory ids. A false hit therefore means the cache demonstrably answered a different question.",
+      "detail": {
+        "queries": 27,
+        "intent_groups": 8,
+        "requests": 54,
+        "labelled_pairs": {
+          "should_hit": 1,
+          "must_not_hit": 316,
+          "unstable_same_intent": 34,
+          "min_should_hit_to_publish": 30,
+          "ground_truth": "should_hit = same intent group AND identical top-3 memory ids from a fresh query; must_not_hit = different intent group; unstable_same_intent = same question asked two ways, different rows retrieved — uncacheable by construction"
+        },
+        "separation": {
+          "separable": false,
+          "min_cosine_should_hit": 0.9064,
+          "max_cosine_should_hit": 0.9064,
+          "max_cosine_must_not_hit": 0.9992,
+          "worst_must_not_hit_pair": [
+            "测试数据应该怎么准备",
+            "回复应该写得多详细"
+          ],
+          "note": "separable is True only when every must-not-hit pair scores below every should-hit pair. False means no threshold exists and the sweep is only choosing how to be wrong."
+        },
+        "retrieval_stability": {
+          "same_intent_pairs": 35,
+          "agreeing": 1,
+          "percent_agreeing": 2.9,
+          "note": "How often two wordings of one question retrieve the same rows at all. This is an upper bound on any semantic cache's hit rate: below it, the cache cannot be right because the thing it would cache is not stable."
+        },
+        "chosen_threshold": 0.9,
+        "chosen_rationale": "no threshold in the sweep reached zero false hits; reporting the least-bad point. The semantic layer stays disabled by default.",
+        "ambiguity_margin": 0.02,
+        "hit_rate_percent": 53.7,
+        "semantic_hit_rate_percent": 7.4,
+        "false_hit_rate_percent": 50.0,
+        "false_hits": 2,
+        "example_false_hits": [
+          {
+            "asked": "回复应该写得多详细",
+            "answered_with": "测试数据应该怎么准备",
+            "cosine": 0.9992,
+            "reason": "different question",
+            "expected_ids": [
+              8,
+              5,
+              12
+            ],
+            "served_ids": [
+              8,
+              5,
+              12
+            ]
+          },
+          {
+            "asked": "回复应该写得多详细",
+            "answered_with": "测试数据应该怎么准备",
+            "cosine": 0.9992,
+            "reason": "different question",
+            "expected_ids": [
+              8,
+              5,
+              12
+            ],
+            "served_ids": [
+              8,
+              5,
+              12
+            ]
+          }
+        ],
+        "cost_model": {
+          "marginal_saving_percent": 7.4,
+          "vector_searches_avoided_percent": 53.7,
+          "embedding_calls_avoided_percent": 46.3,
+          "exact_hit_rate_is_a_harness_artifact": true,
+          "note": "marginal_saving_percent is the only figure M5 may claim: the share of requests the SEMANTIC layer answered that an exact-key cache would have missed. The larger vector_searches_avoided_percent includes exact-key hits, which existed before M5 and whose rate is set by how often this workload repeats a query verbatim (CACHE_WORKLOAD_ROUNDS=2) — a property of the test, not of the cache. An exact hit skips the embedding call and the vector search; a semantic hit skips only the vector search, because the embedding is what finds the neighbour and has already been paid for. Under the local ollama embedder neither call is billed, so the dollar saving is zero by construction — this is a latency and load figure, and it is not the LLM API cost saving the name suggests."
+        },
+        "publishable": false,
+        "publish_blockers": [
+          "should-hit and must-not-hit cosines overlap: no threshold separates them",
+          "2 false hits at the chosen threshold",
+          "only 1 should-hit pairs, below the 30 needed for the result to mean anything"
+        ],
+        "live_confirmation": {
+          "ran": true,
+          "threshold": 0.9,
+          "semantic_hits": 4,
+          "false_hits": 2,
+          "stats": {
+            "lookups": 83,
+            "hits": 29,
+            "lru_hits": 25,
+            "exact_redis_hits": 0,
+            "semantic_hits": 4,
+            "semantic_rejections": 0,
+            "misses": 54,
+            "hit_rate": 34.93975903614458,
+            "semantic_enabled": true,
+            "semantic_threshold": 0.9,
+            "semantic_margin": 0.02
+          },
+          "matches_simulation": true
+        },
+        "sweep": [
+          {
+            "threshold": 0.7,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 17,
+            "semantic_hits": 20,
+            "misses": 17,
+            "hit_rate": 68.5,
+            "semantic_hit_rate": 37.0,
+            "false_hits": 18,
+            "false_hit_rate": 90.0,
+            "refused_ambiguous": 4,
+            "refused_below_threshold": 12
+          },
+          {
+            "threshold": 0.75,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 19,
+            "semantic_hits": 16,
+            "misses": 19,
+            "hit_rate": 64.8,
+            "semantic_hit_rate": 29.6,
+            "false_hits": 14,
+            "false_hit_rate": 87.5,
+            "refused_ambiguous": 1,
+            "refused_below_threshold": 17
+          },
+          {
+            "threshold": 0.8,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 23,
+            "semantic_hits": 8,
+            "misses": 23,
+            "hit_rate": 57.4,
+            "semantic_hit_rate": 14.8,
+            "false_hits": 6,
+            "false_hit_rate": 75.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 22
+          },
+          {
+            "threshold": 0.85,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 25,
+            "semantic_hits": 4,
+            "misses": 25,
+            "hit_rate": 53.7,
+            "semantic_hit_rate": 7.4,
+            "false_hits": 2,
+            "false_hit_rate": 50.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 24
+          },
+          {
+            "threshold": 0.88,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 25,
+            "semantic_hits": 4,
+            "misses": 25,
+            "hit_rate": 53.7,
+            "semantic_hit_rate": 7.4,
+            "false_hits": 2,
+            "false_hit_rate": 50.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 24
+          },
+          {
+            "threshold": 0.9,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 25,
+            "semantic_hits": 4,
+            "misses": 25,
+            "hit_rate": 53.7,
+            "semantic_hit_rate": 7.4,
+            "false_hits": 2,
+            "false_hit_rate": 50.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 24
+          },
+          {
+            "threshold": 0.92,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
+          },
+          {
+            "threshold": 0.94,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
+          },
+          {
+            "threshold": 0.95,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
+          },
+          {
+            "threshold": 0.96,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
+          },
+          {
+            "threshold": 0.97,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
+          },
+          {
+            "threshold": 0.98,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
+          },
+          {
+            "threshold": 0.99,
+            "margin": 0.02,
+            "requests": 54,
+            "exact_hits": 26,
+            "semantic_hits": 2,
+            "misses": 26,
+            "hit_rate": 51.9,
+            "semantic_hit_rate": 3.7,
+            "false_hits": 2,
+            "false_hit_rate": 100.0,
+            "refused_ambiguous": 0,
+            "refused_below_threshold": 25
           }
         ]
       }
