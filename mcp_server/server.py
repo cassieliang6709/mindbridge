@@ -16,7 +16,7 @@ Register it with Claude Desktop in
         "mindbridge": {
           "command": "python",
           "args": ["-m", "mcp_server.server"],
-          "cwd": "/absolute/path/to/mindbridge-demo",
+          "cwd": "/absolute/path/to/mindbridge",
           "env": {
             "MINDBRIDGE_DATABASE_URL":
               "postgresql://mindbridge:mindbridge@localhost:5433/mindbridge"

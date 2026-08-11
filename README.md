@@ -135,7 +135,7 @@ Register the MCP server with Claude Desktop, Claude Code, Cursor or VS Code:
     "mindbridge": {
       "command": "python",
       "args": ["-m", "mcp_server.server"],
-      "cwd": "/absolute/path/to/mindbridge-demo",
+      "cwd": "/absolute/path/to/mindbridge",
       "env": {
         "MINDBRIDGE_DATABASE_URL": "postgresql://mindbridge:mindbridge@localhost:5433/mindbridge"
       }
@@ -320,7 +320,7 @@ the same 4,096-token truncation used during training.
 
 ## Current local state
 
-Read from the running store on 2026-08-09, not copied forward from an earlier
+Read from the running store on 2026-08-11, not copied forward from an earlier
 run. Everything here is rebuildable, so treat it as a snapshot rather than a
 fact about the project.
 
@@ -334,7 +334,7 @@ fact about the project.
 | MLX adapter | `train/outputs/mlx-adapters/adapters.safetensors` |
 
 T3 was briefly down to a single preference after a rebuild replayed narratives
-without replaying preferences. Restored on 2026-08-09 by:
+without replaying preferences. Restored on 2026-08-11 by:
 
 ```bash
 .venv/bin/python -m scripts.replay_extractions --apply

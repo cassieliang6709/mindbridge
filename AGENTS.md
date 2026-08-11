@@ -154,8 +154,8 @@ threshold, which collapsed on 170 rows. A 3-sample run showed 100% compliance
 where 30 samples showed 80% — and that 80% was itself wrong: at n=235 the same
 v2 prompt scores **85%**, above v1's 83%. The conclusion "the prompt change did
 not help" was recorded confidently and survived two sessions before the data
-overturned it. Re-read `--stats`; do not quote a remembered comparison. When n is small, read every case individually rather than the
-aggregate rate.
+overturned it. Re-read `--stats`; do not quote a remembered comparison. When n
+is small, read every case individually rather than the aggregate rate.
 
 **Version anything that can move a metric.** `PROMPT_VERSION` is recorded per
 attempt and `--stats` breaks compliance down by it, so a prompt change cannot
