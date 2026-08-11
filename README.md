@@ -329,20 +329,21 @@ fact about the project.
 | T1 turns | 13,072 |
 | T2 day cards / session cards | 56 / 242 |
 | Cards carrying model-written prose | 238 |
-| T3 open preferences | **1** |
+| T3 open preferences | 329 |
 | Captured extraction pairs | 281 |
 | MLX adapter | `train/outputs/mlx-adapters/adapters.safetensors` |
 
-T3 holding a single preference is not a bug in dedup — it is a rebuild that
-replayed narratives without replaying preferences. The diary's memory timeline
-will look nearly empty until this is run:
+T3 was briefly down to a single preference after a rebuild replayed narratives
+without replaying preferences. Restored on 2026-08-09 by:
 
 ```bash
 .venv/bin/python -m scripts.replay_extractions --apply
 ```
 
-That reads the 281 captured pairs and writes their preferences back through the
-current embedder, so they land deduplicated. It calls no model.
+That reads the captured pairs and writes their preferences back through the
+current embedder, calling no model. It restored 329 open preferences and merged
+85 of 413 writes on the way in — the top rows absorbed three duplicates each,
+which is the dedup path doing its job rather than a coincidence.
 
 ## Rebuilding the database from scratch
 
