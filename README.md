@@ -60,7 +60,7 @@ one Mac; it labels that state instead of presenting the sample as live.
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `/demo` wired to the API, with an offline fallback | done |
 | Nightly scheduler for Path A (launchd, opt-in) | done |
-| `train/` — 3B 4-bit MLX LoRA training and holdout evaluation (M2) | working locally |
+| `train/` — 3B 4-bit MLX LoRA training and holdout evaluation (M2) | completed locally (2026-08-09) |
 | Local MLX HTTP provider → T2/T3 → API/Diary/MCP | working locally |
 | Semantic query cache experiment (M5) | measured unsafe; disabled |
 
@@ -259,7 +259,7 @@ error bar wider than the number and it would land on a public page.
 
 One card per day caps the training set at one pair per day, which is far too
 slow to reach a usable fine-tune. Ingest also writes one card per session, which
-on this history is 224 cards against 53 days — about 4x the extraction targets,
+on this history is 242 cards against 56 days — about 4x the extraction targets,
 and they compound as you work.
 
 ```bash
@@ -297,15 +297,52 @@ omission caused 17 of 19 failures.
 
 | what | value | n | how |
 | --- | --- | --- | --- |
-| Teacher first-attempt schema compliance | **84%** | 277 | Sonnet via claude-cli; `--stats` |
+| Teacher first-attempt schema compliance | **84.7%** | 281 | Sonnet via claude-cli; `--stats` |
 | Teacher on the date-isolated local holdout | **82.2%** | 45 | captured first-attempt flags |
 | Qwen2.5-3B MLX LoRA pilot | **86.7%** | 45 | seed 3407; repairs excluded; `evals/mlx_holdout_seed_3407.json` |
 
-The 84% teacher figure is the broad baseline. The 45-pair comparison is the
+The MLX LoRA run is complete: 198 fit rows, 34 training-side validation rows,
+and 45 date-isolated holdout rows produced the adapter in
+`train/outputs/mlx-adapters/`. “Pilot” describes the evidence scope, not an
+unexecuted training plan.
+
+One earlier conclusion has since been overturned by its own method. At n=40 the
+v2 prompt scored 80% against v1's 83%, and this file recorded that the change
+"did not help". At n=235 v2 is **85%** against the same 83%. The original verdict
+was itself the small-sample artifact it warned about; re-read `--stats` rather
+than trusting a remembered comparison.
+
+The 84.7% teacher figure is the broad baseline. The 45-pair comparison is the
 like-for-like one because both models see the same held-out dates. The local
 pilot is reproducible and encouraging, not a claim of statistical superiority:
 39 valid replies versus 37 is a two-case difference, and 13 prompts required
 the same 4,096-token truncation used during training.
+
+## Current local state
+
+Read from the running store on 2026-08-09, not copied forward from an earlier
+run. Everything here is rebuildable, so treat it as a snapshot rather than a
+fact about the project.
+
+| | |
+| --- | --- |
+| T1 turns | 13,072 |
+| T2 day cards / session cards | 56 / 242 |
+| Cards carrying model-written prose | 238 |
+| T3 open preferences | **1** |
+| Captured extraction pairs | 281 |
+| MLX adapter | `train/outputs/mlx-adapters/adapters.safetensors` |
+
+T3 holding a single preference is not a bug in dedup — it is a rebuild that
+replayed narratives without replaying preferences. The diary's memory timeline
+will look nearly empty until this is run:
+
+```bash
+.venv/bin/python -m scripts.replay_extractions --apply
+```
+
+That reads the 281 captured pairs and writes their preferences back through the
+current embedder, so they land deduplicated. It calls no model.
 
 ## Rebuilding the database from scratch
 

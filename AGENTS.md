@@ -29,7 +29,7 @@ In practice:
 
 | fact | value | n | where |
 | --- | --- | --- | --- |
-| **Teacher first-attempt schema compliance** | **84%** | **277** | current bar; `extract.runner --stats` |
+| **Teacher first-attempt schema compliance** | **84.7%** | **281** | current bar; `extract.runner --stats` |
 | **Local 3B MLX first-attempt compliance** | **86.7%** | **45 seeded holdout prompts** | `evals/mlx_holdout_seed_3407.json` |
 | Teacher on the same seeded holdout | 82.2% | 45 | `evals/mlx_holdout_seed_3407.json` |
 | Same, earlier smaller sample | 81.4% | 86 | superseded — kept so older commits read correctly |
@@ -37,7 +37,7 @@ In practice:
 | T3 dedup threshold under nomic-embed-text | **0.80** | 170 rows read individually | `api/settings.py` |
 | Semantic query cache viability | **not viable** | 27 queries / 54 requests | `cacheCostSaving` stays null |
 
-**84% (n=277) is the bar** stage two's fine-tuned model must clear, judged by the
+**84.7% (n=281) is the bar** stage two's fine-tuned model must clear, judged by the
 same rule: **first reply only, repairs excluded.** Changing that definition to
 make a number look better invalidates the comparison the whole project rests on.
 
@@ -149,9 +149,12 @@ non-empty before trusting it.
 
 ## Method notes
 
-**Small samples lie.** A 7-pair sample produced the 0.62 threshold, which
-collapsed on 170 rows. A 3-sample run showed 100% compliance where 30 samples
-showed 80%. When n is small, read every case individually rather than the
+**Small samples lie, and 30 is still small.** A 7-pair sample produced the 0.62
+threshold, which collapsed on 170 rows. A 3-sample run showed 100% compliance
+where 30 samples showed 80% — and that 80% was itself wrong: at n=235 the same
+v2 prompt scores **85%**, above v1's 83%. The conclusion "the prompt change did
+not help" was recorded confidently and survived two sessions before the data
+overturned it. Re-read `--stats`; do not quote a remembered comparison. When n is small, read every case individually rather than the
 aggregate rate.
 
 **Version anything that can move a metric.** `PROMPT_VERSION` is recorded per
