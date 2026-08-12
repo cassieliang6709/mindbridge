@@ -7,7 +7,8 @@ Parsing, storage and the MLX extraction path stay on your machine. Hosted
 extraction remains available as an explicit opt-in for generating training data.
 
 [Live site](https://mindbridge-demo-psi.vercel.app) ·
-[Diary](https://mindbridge-demo-psi.vercel.app/demo)
+[Diary](https://mindbridge-demo-psi.vercel.app/demo) ·
+[Interview demo](https://mindbridge-demo-psi.vercel.app/interview-demo)
 
 ## Two capture paths
 
