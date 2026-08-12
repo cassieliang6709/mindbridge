@@ -6,9 +6,9 @@ each day into one memory card, and serves the same store to any MCP client.
 Parsing, storage and the MLX extraction path stay on your machine. Hosted
 extraction remains available as an explicit opt-in for generating training data.
 
-[Live site](https://mindbridge-demo-psi.vercel.app) ·
-[Diary](https://mindbridge-demo-psi.vercel.app/demo) ·
-[Interview demo](https://mindbridge-demo-psi.vercel.app/interview-demo)
+[Live site](https://mindbridge.liangyue.site) ·
+[Diary](https://mindbridge.liangyue.site/demo) ·
+[Interview demo](https://mindbridge.liangyue.site/interview-demo)
 
 ## Two capture paths
 
