@@ -64,3 +64,6 @@ train/outputs/
 
 # Database dumps taken before migrations; contain personal preference text
 backups/
+
+# Local archive/reactivation bookkeeping — not portfolio content
+REACTIVATED.md
