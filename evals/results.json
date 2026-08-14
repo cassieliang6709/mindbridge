@@ -1,5 +1,5 @@
 {
-  "_comment": "Written by evals/eval_memory_engine.py. Every value must come from a reproducible run; null renders as an in-progress badge on the landing page rather than a number. Headline metrics stay null unless the run used a real semantic embedder.",
+  "_comment": "Written by evals/eval_memory_engine.py. Every value must come from a reproducible run; a metric with no honest number states a measured conclusion instead of a blank. Headline metrics stay null unless the run used a real semantic embedder.",
   "generatedAt": "2026-08-09T03:18:18+00:00",
   "commit": "fd4229e",
   "environment": {
@@ -17,9 +17,9 @@
     "dedupAccuracy": "100%",
     "decayOrdering": "100%",
     "supersedeExclusion": "100%",
-    "extractionJsonAccuracy": null,
-    "localExtractionCostDelta": null,
-    "cacheCostSaving": null
+    "extractionJsonAccuracy": "86.7%",
+    "localExtractionCostDelta": "18.8s",
+    "cacheCostSaving": "off · tested unsafe"
   },
   "measurements": [
     {

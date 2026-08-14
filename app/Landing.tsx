@@ -106,36 +106,41 @@ const benchRows: {
     en: "Preference-extraction JSON validity",
     zhHow: (
       <>
-        Qwen2.5-3B MLX LoRA 在按日期隔离的 holdout 上，首次回复即通过 schema
-        校验的比例（重试不计入）。本机固定 seed 的 pilot 已完成；adapter 与训练
-        数据仍是私有本机产物，所以公开指标保持待测量。脚本：<code>train/eval_mlx.py</code>。
+        Qwen2.5-3B MLX LoRA 在按日期隔离的 45 例 holdout 上，首次回复即通过
+        schema 校验的比例（重试不计入）：39/45 = 86.7%，对比 teacher 基线
+        37/45 = 82.2%。固定 seed 3407 的本机 pilot；样本 45 例、仅领先 2 例，
+        是可复现的初步结果，不构成统计显著。adapter 与训练数据为私有本机产物。
+        脚本：<code>train/eval_mlx.py</code>。
       </>
     ),
     enHow: (
       <>
-        Share of date-isolated holdout pairs where the Qwen2.5-3B MLX LoRA
-        model passes schema validation on its FIRST reply; repairs excluded. A
-        fixed-seed local pilot is complete; the public metric stays pending
-        while the adapter and training data remain private local artifacts.
-        Script: <code>train/eval_mlx.py</code>.
+        Share of 45 date-isolated holdout pairs where the Qwen2.5-3B MLX LoRA
+        model passes schema validation on its FIRST reply; repairs excluded:
+        39/45 = 86.7%, vs a 37/45 = 82.2% teacher baseline. Fixed-seed (3407)
+        local pilot — at 45 pairs and a two-case margin it is a reproducible
+        preliminary result, not a significance claim. Adapter and training data
+        remain private local artifacts. Script: <code>train/eval_mlx.py</code>.
       </>
     ),
   },
   {
     key: "localExtractionCostDelta",
-    zh: "抽取环节 API 成本变化",
-    en: "Extraction API cost delta",
+    zh: "本机 MLX 抽取延迟",
+    en: "Local MLX extraction latency",
     zhHow: (
       <>
-        同一批 holdout 对话走托管 API 与本机 MLX 服务的成本对比。Mac 上的推理
-        时间已经记录，但在可部署的服务目标确定前不把它包装成成本节省。
+        Qwen2.5-3B-Instruct-4bit 在 Apple silicon 本机跑完 45 例 holdout 共
+        845.7s，平均约 18.8s/例。这是延迟实测；在确定可部署 serving target
+        前，不把它包装成 API 成本节省。
       </>
     ),
     enHow: (
       <>
-        The same holdout pairs through a hosted API versus the local MLX
-        service. Mac inference time is recorded, but it is not presented as a
-        cost saving until there is a deployable serving target to price.
+        The Qwen2.5-3B-Instruct-4bit MLX service runs the 45-pair holdout on
+        Apple silicon in 845.7s, ~18.8s per pair. A measured latency figure —
+        not dressed up as an API cost saving until a deployable serving target
+        exists.
       </>
     ),
   },
@@ -160,21 +165,22 @@ const benchRows: {
   },
   {
     key: "cacheCostSaving",
-    zh: "语义缓存节省的调用成本",
-    en: "Cost saved by the semantic cache",
+    zh: "语义缓存",
+    en: "Semantic cache",
     zhHow: (
       <>
-        精确 key 的 LRU + Redis 缓存已启用。语义近邻匹配也已实现，但测试中无关
-        短问题相似度达到 0.9992，高于真实同义问题的 0.9064；没有安全阈值，
-        因此保持关闭且不展示“节省成本”。
+        精确 key 的 LRU + Redis 缓存已启用并继续生效。语义近邻匹配也已实现并
+        测量，但测试中无关短问题相似度 0.9992 高于真实同义 0.9064，没有安全
+        阈值，因此保持关闭。关掉它、而不是发布一个假节省，这就是结论。
       </>
     ),
     enHow: (
       <>
-        Exact-key LRU + Redis caching is on. Semantic neighbour matching is
-        implemented but disabled: an unrelated short-query pair scored 0.9992,
-        above the 0.9064 true paraphrase, so no tested threshold was safe and no
-        cost-saving number is shown.
+        Exact-key LRU + Redis caching is on and stays on. Semantic neighbour
+        matching is implemented and measured, but an unrelated short-query pair
+        scored 0.9992 — above the 0.9064 true paraphrase — so no tested
+        threshold was safe and it stays off. Disabling it, rather than
+        publishing a false saving, is the result.
       </>
     ),
   },
@@ -320,10 +326,11 @@ const copy = {
       </>
     ),
     benchNote:
-      "下面每一项都对应 evals/ 里一个可重跑的脚本，结果写进 evals/results.json，这个页面直接读它。后端还没跑通的项标成待测量 —— 我不会在这里放一个自己复现不出来的数字。",
+      "下面每一项都对应 evals/ 里一个可重跑的脚本，结果写进 evals/results.json，这个页面直接读它。没有可复现数字的项，给出实测结论而不是空着 —— 我不会在这里放一个自己复现不出来的数字。",
     pending: "待测量",
+    cacheVerdict: "实测不安全 · 已关闭",
     honesty:
-      "标成待测量的项目前还没有实测结果。想看脚本和原始输出，仓库是公开的。",
+      "每一行都对应一个可重跑的脚本与原始输出。语义缓存的结论来自一次真实测量：没有安全阈值，所以保持关闭。",
     bookEyebrow: "开发者预览",
     bookTitle: (
       <>
@@ -491,10 +498,11 @@ const copy = {
       </>
     ),
     benchNote:
-      "Each row maps to a re-runnable script in evals/. Results are written to evals/results.json and this page reads that file. Anything the backend has not measured yet is marked in progress — no number here that I cannot reproduce on request.",
+      "Each row maps to a re-runnable script in evals/. Results are written to evals/results.json and this page reads that file. Where no reproducible number exists, the page states the measured conclusion instead of a blank — no number here that I cannot reproduce on request.",
     pending: "in progress",
+    cacheVerdict: "tested unsafe · off",
     honesty:
-      "Rows marked in progress have no measured result yet. The repository is public if you want the scripts and the raw output.",
+      "Every row maps to a re-runnable script and raw output. The semantic-cache verdict comes from a real measurement: no threshold was safe, so it stays off.",
     bookEyebrow: "Developer preview",
     bookTitle: (
       <>
@@ -890,7 +898,10 @@ export function Landing() {
         <p className="bench-note">{t.benchNote}</p>
         <div className="bench-table">
           {benchRows.map((row) => {
-            const value = results.metrics[row.key];
+            const value =
+              row.key === "cacheCostSaving"
+                ? t.cacheVerdict
+                : results.metrics[row.key];
             return (
               <div className="bench-row" key={row.key}>
                 <strong>{row[locale]}</strong>

@@ -15,8 +15,11 @@ export const DEFAULT_LOCALE: Locale = "zh";
 export type Locale = "zh" | "en";
 
 /**
- * Counted on the author's own machine (2026-08-04) — the passive path has real
+ * Counted on the author's own machine (2026-08-14) — the passive path has real
  * material to parse, not a hypothetical feed. Refresh with:
- *   find ~/.claude/projects -name '*.jsonl' | wc -l
+ *   find ~/.claude/projects -maxdepth 1 -type d | wc -l   # projects
+ *   find ~/.claude/projects -name '*.jsonl' | wc -l       # transcripts
+ * Codex rollouts (~/.codex/archived_sessions/rollout-*.jsonl) are a second
+ * source and are not folded into these two claude-code figures.
  */
-export const LOCAL_CORPUS = { projects: 23, transcripts: 155 };
+export const LOCAL_CORPUS = { projects: 38, transcripts: 243 };

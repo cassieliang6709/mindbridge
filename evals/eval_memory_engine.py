@@ -1015,18 +1015,18 @@ def write_results(
     exclusion = by_name["supersede_exclusion"]
     cache = by_name["cache_semantic"]
 
-    # cacheCostSaving publishes only when the semantic cache measurement clears
-    # its own bar: a real embedder, a threshold that produced zero false hits,
-    # and a labelled set on which the should-hit and must-not-hit pairs are
-    # actually separable. Otherwise it stays null and the page keeps saying
-    # "in progress", which is the truth. A cache that sometimes returns another
-    # question's memories has not saved anything — it has moved the cost from
-    # the bill to the answer.
+    # cacheCostSaving publishes a number only when the semantic cache measurement
+    # clears its own bar: a real embedder, a threshold that produced zero false
+    # hits, and a labelled set on which the should-hit and must-not-hit pairs are
+    # actually separable. Otherwise it carries a qualitative verdict instead of
+    # null — a cache that sometimes returns another question's memories has not
+    # saved anything, and the page says so rather than implying a number is merely
+    # pending.
     cache_detail = cache.detail
     if semantic and cache_detail.get("publishable"):
         cache_saving = _percent(cache_detail["cost_model"]["marginal_saving_percent"])
     else:
-        cache_saving = None
+        cache_saving = "off · tested unsafe"
 
     # Retrieval-quality numbers are only publishable from a real semantic
     # embedder; under 'hashing' they stay null and the landing page keeps
@@ -1039,7 +1039,8 @@ def write_results(
         # Owned by this script, embedder-independent.
         "decayOrdering": _percent(ordering.value),
         "supersedeExclusion": _percent(exclusion.value),
-        # Owned by a script that does not exist yet (M2).
+        # Owned by train/eval_mlx.py (extractionJsonAccuracy, local MLX latency),
+        # carried forward unchanged because this script never runs the model.
         "extractionJsonAccuracy": previous_metrics.get("extractionJsonAccuracy"),
         "localExtractionCostDelta": previous_metrics.get("localExtractionCostDelta"),
         # Owned by this script as of M5.
@@ -1049,9 +1050,9 @@ def write_results(
     payload = {
         "_comment": (
             "Written by evals/eval_memory_engine.py. Every value must come from a "
-            "reproducible run; null renders as an in-progress badge on the "
-            "landing page rather than a number. Headline metrics stay null unless "
-            "the run used a real semantic embedder."
+            "reproducible run; a metric with no honest number states a measured "
+            "conclusion instead of a blank. Headline metrics stay null unless the "
+            "run used a real semantic embedder."
         ),
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "commit": _git_commit(),
@@ -1144,7 +1145,7 @@ async def run() -> dict[str, Any]:
     if cache_detail["publishable"]:
         print("  cacheCostSaving published.")
     else:
-        print("  cacheCostSaving left null:")
+        print("  cacheCostSaving left as a qualitative verdict:")
         for blocker in cache_detail["publish_blockers"]:
             print(f"    - {blocker}")
     if not semantic:

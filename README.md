@@ -366,14 +366,22 @@ under the non-semantic hashing embedder come back deduplicated.
 
 ## Metrics policy
 
-The landing page reads `evals/results.json` and renders any `null` as an amber
-**in progress** badge instead of a number. A figure appears only once
-`evals/eval_memory_engine.py` has produced it against a live database, so every
-number on the page is reproducible with one command.
+The landing page reads `evals/results.json` directly. Every value traces to a
+re-runnable script against a live database, so every number on the page is
+reproducible with one command.
 
-Measurements split by whether they depend on embedding quality. The two
-mechanical invariants publish from any run; the rest stay null until a real
-semantic provider is configured.
+- The four engine metrics (`promptTokenReduction`, `dedupAccuracy`,
+  `decayOrdering`, `supersedeExclusion`) come from `evals/eval_memory_engine.py`.
+- `extractionJsonAccuracy` (86.7%) and `localExtractionCostDelta` (18.8s, the
+  local MLX latency per holdout pair) come from the fixed-seed MLX run in
+  `evals/mlx_holdout_seed_3407.json` (`train/eval_mlx.py`).
+- `cacheCostSaving` is a qualitative verdict, not a number: the semantic cache
+  was measured and found unsafe (an unrelated short-query pair scored 0.9992,
+  above the 0.9064 true paraphrase), so it stays off rather than publishing a
+  saving it cannot back.
+
+Where a metric has no honest number, the page states the measured conclusion
+instead of inventing one.
 
 | Metric | Depends on embedder | Script |
 | --- | --- | --- |
