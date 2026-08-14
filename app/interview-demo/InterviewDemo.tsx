@@ -25,13 +25,13 @@ const days = [
     title: "Set the working contract",
     titleZh: "建立协作约定",
     transcript:
-      "For Python projects, use uv instead of pip. Keep API responses concise and cite the source filing for every financial claim.",
+      "For Python projects, use uv instead of pip. Keep production API responses concise. And before I start implementing, I record every design decision in the repo's AGENTS.md.",
     transcriptZh:
-      "Python 项目使用 uv，不用 pip。API 回复保持简洁；所有财务结论必须引用原始财报。",
+      "Python 项目用 uv，不用 pip。生产环境的 API 回复保持简洁。另外，动手实现前，我总会把设计决策写进仓库的 AGENTS.md。",
     writes: [
       "Use uv for Python dependency management",
       "Keep production API responses concise",
-      "Financial claims require source citations",
+      "Record design decisions in AGENTS.md before implementing",
     ],
     memoryIds: [201, 202, 203],
     status: "3 durable memories written",
@@ -41,16 +41,16 @@ const days = [
   {
     day: "02",
     date: "Aug 06",
-    title: "Record an architecture decision",
-    titleZh: "记录架构决策",
+    title: "Choose how memory ages",
+    titleZh: "决定记忆如何衰减",
     transcript:
-      "Pure vector search missed exact ticker and filing terms. Use BM25 plus pgvector, fused with RRF.",
+      "Pure vector similarity ignores recency — a preference I stopped repeating a year ago still outranks one I said yesterday. Rank memories by cosine × exp(-λ·Δt), so age discounts relevance.",
     transcriptZh:
-      "纯向量检索漏掉了精确的 ticker 和财报术语。改用 BM25 + pgvector，并用 RRF 融合。",
-    writes: ["Use BM25 + pgvector with RRF for filing retrieval"],
+      "纯向量相似度会忽略时效——一条一年没再提的偏好，仍会压过昨天刚说的。用 cosine × exp(-λ·Δt) 排序，让年龄衰减掉旧记忆。",
+    writes: ["Rank recall by cosine × exp(-λ·Δt) — age discounts similarity"],
     memoryIds: [204],
-    status: "1 engineering decision written",
-    statusZh: "写入 1 条工程决策",
+    status: "1 retrieval rule written",
+    statusZh: "写入 1 条检索规则",
     kind: "write" as const,
   },
   {
@@ -93,12 +93,12 @@ const questions = [
     label: "How should retrieval work?",
     labelZh: "检索应该怎么实现？",
     answer:
-      "Use BM25 + pgvector with RRF. Exact filing terms need sparse retrieval; semantic matches come from the dense side.",
+      "Rank by cosine × exp(-λ·Δt). Dense similarity is discounted by how long ago each memory was learned, so a preference I haven’t repeated in months fades behind a fresh one.",
     answerZh:
-      "使用 BM25 + pgvector，并通过 RRF 融合。精确财报术语由稀疏检索覆盖，语义匹配来自稠密检索。",
+      "按 cosine × exp(-λ·Δt) 排序：语义相似度按记忆的年龄衰减，一条几个月没提的偏好会排在刚说的后面。",
     evidence: [
-      { id: 204, text: "BM25 + pgvector + RRF", date: "Aug 06", score: "0.913" },
-      { id: 203, text: "Financial claims require citations", date: "Aug 05", score: "0.741" },
+      { id: 204, text: "cosine × exp(-λ·Δt)", date: "Aug 06", score: "0.913" },
+      { id: 206, text: "Debug mode shows scores + evidence ids", date: "Aug 07", score: "0.802" },
     ],
   },
   {
@@ -117,12 +117,12 @@ const questions = [
     label: "What changed over time?",
     labelZh: "哪些偏好发生过变化？",
     answer:
-      "The original concise-response preference remains valid for production. A later memory added a debug-mode exception without deleting the earlier history.",
+      "The original “concise everywhere” memory is closed, not deleted. A later memory split it — production stays concise, debug adds scores + ids — and the superseded record stays queryable as history.",
     answerZh:
-      "原先的简洁回复偏好仍适用于生产环境；后续记忆增加了 debug mode 例外，同时保留历史记录。",
+      "原先“处处简洁”的记忆被关闭而非删除。后续记忆把它拆开——生产保持简洁、debug 增加分数与 ids——被取代的记录仍可作为历史查询。",
     evidence: [
       { id: 205, text: "Production responses stay concise", date: "Aug 07", score: "0.918" },
-      { id: 202, text: "Concise API responses", date: "Aug 05", score: "0.782 · superseded" },
+      { id: 202, text: "Concise API responses", date: "Aug 05", score: "0.223 · superseded" },
     ],
   },
 ];
