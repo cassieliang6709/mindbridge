@@ -11,6 +11,8 @@ compliance rate measures the model, not our leniency.
 
 from __future__ import annotations
 
+import re
+
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -55,14 +57,51 @@ class ExtractedPreference(BaseModel):
         "Fix the 500 in /retrieve" is today's work, not a durable preference. If
         it reaches T3 it will be recalled for months as if it still mattered, so
         it is cheaper to fail validation and let the repair loop try again.
+
+        The imperative list alone was not enough. A local 3B model passed schema
+        validation while writing the day's activity into long-term memory —
+        "You added a LinkedIn profile link to the website", at confidence 1.00.
+        Two more shapes are therefore rejected:
+
+        - Past-tense narration of a specific act ("You added…", "You fixed…"),
+          which describes an event, not a standing preference.
+        - Present progressive ("You are testing…", "You are updating…"), which
+          describes what is happening now and will be false next week.
+
+        Durable phrasings survive untouched: "Prefers…", "Keeps…", "Wants…",
+        "You have a preference for…", "Uses X rather than Y".
         """
         lowered = value.lower().strip()
+
         transient_starts = ("fix ", "debug ", "finish ", "today ", "continue ")
         if lowered.startswith(transient_starts):
             raise ValueError(
                 "content looks like a one-off task, not a durable preference; "
                 "state a lasting habit or requirement instead"
             )
+
+        # "You are <verb>ing" / "You're <verb>ing" — an activity in progress.
+        if re.match(r"^(you\s+are|you're|they\s+are|user\s+is)\s+\w+ing\b", lowered):
+            raise ValueError(
+                "content describes an activity in progress, not a durable "
+                "preference; say what the user consistently prefers instead of "
+                "what they are doing right now"
+            )
+
+        # "You added / created / updated / implemented …" — a completed act.
+        past_acts = (
+            "added", "created", "updated", "implemented", "wrote", "built",
+            "changed", "removed", "deleted", "renamed", "moved", "installed",
+            "configured", "deployed", "ran", "tested", "fixed", "refactored",
+        )
+        match = re.match(r"^(?:you|the user|user)\s+(\w+)\b", lowered)
+        if match and match.group(1) in past_acts:
+            raise ValueError(
+                f"content narrates a specific action ('{match.group(1)}'), not a "
+                "durable preference; state the lasting habit it implies, or "
+                "return no preference at all"
+            )
+
         return value.strip()
 
 
