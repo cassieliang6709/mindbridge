@@ -52,15 +52,97 @@ a **local STDIO MCP server**. Read the entire guide before changing anything.
 
 ## First safe test
 
-Run a read before asking to write anything:
+Run two separate reads before asking to write anything:
 
-> Call MindBridge and tell me what writing preferences you remember. Cite the
-> memory ids.
+> Call MindBridge's `get_daily_card` for the latest T2 card, then call
+> `review_long_term_memory` for the newest three T3 records. Answer under
+> separate T2 and T3 headings, cite every id, and do not write.
 
 For an empty new store, explain that zero results is correct. If the user wants
 to test a durable write, ask them for one non-sensitive preference and let the
 MCP approval flow confirm `upsert_preference`. Then open another session and
 query it again to demonstrate cross-session recall.
+
+## Everyday use from Codex
+
+MindBridge currently exposes four tools:
+
+- `get_daily_card` reads one T2 day card: what happened, observed facts and
+  open threads. It does not change T3.
+- `review_long_term_memory` lists T3 records newest-first for an explicit
+  audit. It does not semantically rank results or bump access counts.
+- `temporal_query` recalls relevant preferences, newest-weighted, and returns
+  memory ids that should be cited when used.
+- `upsert_preference` stores a durable preference, refreshes a matching record,
+  or supersedes a conflicting record after approval.
+
+Useful requests to give Codex:
+
+### Review what happened today (T2)
+
+> Call `get_daily_card` for the latest T2 card. Cite the card id and summarize
+> completed work, observed facts and open threads. Do not infer a personality.
+
+### Audit what lasts across sessions (T3)
+
+> Call `review_long_term_memory` for the newest ten T3 records. Separate current
+> from superseded records and cite every memory id.
+
+### Recall before doing work
+
+> Query MindBridge for my writing preferences, cite the memory ids, then edit
+> this essay.
+
+### Store a durable preference
+
+> Ask MindBridge to remember: explain technical ideas in plain language and
+> start with a concrete example.
+
+Do not store a password, API key, one-time instruction or short-lived task
+detail as a preference.
+
+### Supersede an old preference
+
+> My preference changed: write the PRD in English first, then provide a
+> separate Chinese version. Ask MindBridge to supersede conflicts.
+
+### Audit history
+
+> Check MindBridge for conflicts in my bilingual-document preferences. Include
+> superseded records and cite every memory id.
+
+## Choose a memory operating model
+
+MindBridge does not replace or redirect Codex's native local Memories backend.
+Codex-managed files under `~/.codex/memories/` are generated state: do not edit,
+replace or symlink them as part of this installation.
+
+### 1. Keep both stores — works today
+
+Leave native Codex Memories enabled and use MindBridge over MCP alongside it.
+This requires no migration and preserves native automatic memory injection, but
+the two systems may retain overlapping or conflicting facts with different ids
+and provenance.
+
+### 2. MindBridge as source of truth — recommended target
+
+Import reviewed native-memory records into MindBridge once, validate dedup and
+provenance, then separately disable native memory generation and injection.
+Codex, Claude and Cursor can then use the same MindBridge records through MCP.
+
+This repository does not yet ship the native-memory importer. Do not claim the
+migration is complete, and do not disable native Memories until the user has a
+verified backup and an import report.
+
+### 3. One-way import — safer transition
+
+Periodically import generated Codex memory records into MindBridge without
+writing changes back to Codex files. This preserves history and avoids sync
+loops. It still leaves two physical stores until native Memories are disabled.
+
+Required rules should remain in `AGENTS.md` or checked-in project documentation
+under every model; memory recall is not a substitute for deterministic project
+instructions.
 
 ## What is running
 

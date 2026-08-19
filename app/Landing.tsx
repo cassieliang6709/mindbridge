@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import {
   ArrowRight,
   Book,
@@ -9,9 +9,7 @@ import {
   Check,
   FileCode,
   GithubLogo,
-  Hourglass,
   Laptop,
-  PaperPlaneTilt,
   Path,
   PlugsConnected,
   ShieldCheck,
@@ -21,7 +19,6 @@ import {
 import rawResults from "../evals/results.json";
 import {
   CONTACT_EMAIL,
-  DEFAULT_LOCALE,
   GITHUB_URL,
   LOCAL_CORPUS,
   type Locale,
@@ -191,22 +188,33 @@ const benchRows: {
 const copy = {
   zh: {
     htmlLang: "zh-CN",
-    docTitle: "MindBridge — 记住你的变化，而不只是事实",
+    docTitle: "MindBridge — 让 AI 记得你，也记得你已经改变",
     docDesc:
       "MindBridge 是一款反思型 AI Companion：它用透明、可追溯、能识别变化的 Memory Core，帮助你看见什么没变、什么已经改变。",
-    nav: ["两条捕获路径", "技术结构", "指标"],
+    nav: ["在 Codex 中使用", "它如何记忆", "实验依据"],
     demo: "试试 Companion Loop",
     stage: "2 分钟可点击合成演示",
-    heroNote: "旧记忆，不该继续定义现在的你。",
+    heroNote: "你的 AI 记得你，也记得你已经改变。",
     title: (
       <>
-        记住你的变化，
+        让 AI 记得你，
         <br />
-        而不只是 <em>记住事实</em>。
+        也记得你已经 <em>改变</em>。
       </>
     ),
-    lede: "MindBridge 是反思型 AI Companion。它不会用错误或过期的记忆定义你；每次引用长期记忆，都能说明来源、时间，以及后来发生了什么变化。底层 Memory Core 本地优先。",
-    learn: "看 Memory Core",
+    lede: "MindBridge 为 Codex 等 AI 工具提供一层可追溯的长期记忆。每次召回都带着来源和时间；偏好改变时，旧记录不会继续冒充现在的你。Memory Core 默认在本地运行。",
+    learn: "在 Codex 中使用",
+    proofEyebrow: "先看见产品，再理解架构",
+    proofTitle: "一张卡片记录今天；一条时间轴解释变化。",
+    proofNote:
+      "MindBridge 把零散对话整理成可以回看、召回和审计的记忆，而不是把整段聊天永久塞回上下文。",
+    principlesEyebrow: "为什么这种记忆更可信",
+    principlesTitle: "每次召回，都回答三个问题。",
+    principles: [
+      ["它从哪里来？", "返回 memory id 与来源记录，你能追到原始证据。", "SOURCE"],
+      ["它何时成立？", "created_at 说明写入时间，valid_at 说明它是否仍有效。", "TIME"],
+      ["后来发生了什么？", "新偏好会取代冲突记录；旧历史保留，但不再代表现在。", "CHANGE"],
+    ] as [string, string, string][],
     // phone 1 — daily card
     cardDate: "2026-08-04 · 周二",
     cardMeta: "自动生成",
@@ -247,9 +255,9 @@ const copy = {
       built: true,
       name: "主动 MCP 读写",
       note: "挂成标准 MCP server，模型在对话里自己决定何时写入、何时召回。",
-      sources: ["upsert_preference", "temporal_query"],
+      sources: ["get_daily_card", "review_long_term_memory", "temporal_query", "upsert_preference"],
     },
-    laneBClients: "Claude Desktop · Claude Code · Cursor · VS Code",
+    laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge 记忆层",
     storeTiers: [
       ["T1", "会话缓冲区 — 今天的原始轮次"],
@@ -270,17 +278,97 @@ const copy = {
     codexTitle: "不只展示页面。MindBridge 已经跑在 Codex 里。",
     codexNote:
       "Codex 通过本地 STDIO MCP 启动 MindBridge，实时调用同一个 MemoryService：查询可以直接执行，长期写入需要用户确认。数据层是本机 Postgres / pgvector、Redis 与 Ollama。",
-    codexProof: "2026-08-19 本机验证：新 Codex 会话成功召回 3 条真实 T3 记忆并引用 memory ids。",
+    codexProof: "2026-08-19 本机验证：新 Codex 会话分别读取真实 T2 日卡 [294] 与 T3 记忆 [329] [328] [327]，全程没有写入。",
     codexSteps: [
       ["01", "把下面的安装指令粘贴进 Codex"],
       ["02", "Codex 完成本地安装后，新开一个会话"],
-      ["03", "查询、确认写入，再跨会话检查来源 ids"],
+      ["03", "先分开查看 T2 / T3，再按需确认长期写入"],
     ] as [string, string][],
-    codexPrompt: "请调用 MindBridge，告诉我你记得的写作偏好，并标注 memory ids。",
+    codexPrompt: "调用 MindBridge 的 get_daily_card 读取最新 T2，再用 review_long_term_memory 读取最新 3 条 T3。分开回答并标注 ids，不要写入。",
     codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally and connect it to this Codex client.",
     codexCopy: "复制安装指令",
     codexCopied: "已复制，粘贴进 Codex",
+    codexGuide: "查看完整安装与使用指南",
     codexBoundary: "本机验证，不是公网托管服务；需要本地数据层运行。公开 Companion Loop 使用合成数据。",
+    usageEyebrow: "在 Codex 里的四步用法",
+    usageTitle: "先看今天，再决定什么值得长期记住。",
+    usageNote:
+      "T2 回答“我今天做了什么”，T3 回答“AI 以后应该怎样理解我”。两个只读入口分开显示；只有最后一步会请求写入确认。",
+    usageItems: [
+      [
+        "01 · 回顾今天（T2）",
+        "读取按天生成的事实、行为观察与未完成事项，不把它们自动当成长期性格。",
+        "调用 get_daily_card 读取最新 T2 日卡，标注 card id，并总结完成事项和 open threads。",
+      ],
+      [
+        "02 · 审计长期记忆（T3）",
+        "完整查看当前和已失效的长期记忆，而不是只看语义搜索命中的几条。",
+        "调用 review_long_term_memory 读取最新 10 条 T3，区分 current 与 superseded，并标注 ids。",
+      ],
+      [
+        "03 · 带着记忆工作",
+        "只召回与当前任务有关的 T3，让 Codex 使用偏好时同时交代来源。",
+        "先用 temporal_query 查询我的写作偏好，引用 memory ids，然后再修改这篇文章。",
+      ],
+      [
+        "04 · 确认后再记住",
+        "一次性指令留在当前任务；只有未来仍有用的稳定偏好才进入 T3。",
+        "调用 upsert_preference 记住：技术解释默认先给直观例子。写入前先让我确认。",
+      ],
+    ] as [string, string, string][],
+    trustEyebrow: "信任边界",
+    trustTitle: "本地优先，不等于含糊其辞。",
+    trustNote:
+      "我们把默认行为、可选的外部处理和暂未支持的范围放在同一个地方说明。",
+    trustItems: [
+      ["默认留在本机", "transcript 解析、Postgres / pgvector、Redis 与检索都在你的设备上运行。"],
+      ["外部抽取需显式开启", "托管模型只用于可选的训练数据生成；不传 --send-to-provider 就不会发送摘录。"],
+      ["公开演示不含真实数据", "Companion Loop 使用合成数据；本机验证结果与公开 demo 明确分开。"],
+      ["Codex 原生 Memories 尚未合并", "当前通过 MCP 连接。若要形成单一事实源，需要另做可审计迁移，而不是直接改 ~/.codex/memories/。"],
+    ] as [string, string][],
+    evidenceEyebrow: "可复现实验",
+    evidenceTitle: "只展示能复跑、能解释的结果。",
+    evidenceNote:
+      "所有数字来自仓库中的 eval 脚本与 results.json。样本小的结果会明确标成 pilot；没有安全阈值的功能就保持关闭。",
+    evidenceLink: "查看评测脚本与原始结果",
+    finalEyebrow: "把它接进你的工作流",
+    finalTitle: "下一次打开 Codex，让它先问问：你现在还是这样吗？",
+    finalNote:
+      "按安装指南启动本地 Memory Core、连接 MCP，然后用一条带 memory ids 的查询检查它记住了什么。",
+    finalPrimary: "在 Codex 中安装",
+    finalSecondary: "打开合成演示",
+    modelEyebrow: "推荐的记忆架构",
+    modelTitle: "MindBridge 做主存储，Codex 通过 MCP 使用。",
+    modelNote:
+      "这是推荐方向，不是已经完成的 Codex 原生 Memories 替换。先把旧记忆做一次可审计迁移，再关闭原生生成与注入，才能得到逻辑上的单一事实源。",
+    modelStatus: "推荐 · 需要一次迁移",
+    modelProsLabel: "得到什么",
+    modelConsLabel: "接受什么",
+    modelPros: [
+      "跨 Codex、Claude 与 Cursor 使用同一组 memory ids",
+      "偏好变化通过 created_at / valid_at 保留完整历史",
+      "查询、写入、去重和权限走同一个 MemoryService",
+    ],
+    modelCons: [
+      "依赖本地 MCP、Postgres、Ollama 等服务可用",
+      "旧 Codex Memories 需要一次迁移与去重验证",
+      "重要规则仍应保留在 AGENTS.md，而不是只放记忆库",
+    ],
+    alternativesTitle: "另外两种方式",
+    alternatives: [
+      [
+        "两套存储并存",
+        "现在即可",
+        "Codex 原生 Memories 与 MindBridge 各自运行。零迁移、保留原生自动注入；代价是重复、冲突和两套来源难以解释。",
+      ],
+      [
+        "单向导入 MindBridge",
+        "稳妥过渡",
+        "定期把 Codex 生成记忆导入 MindBridge，不回写 Codex 文件。能保留历史并避免循环同步；停用原生记忆前仍然存在两份物理存储。",
+      ],
+    ] as [string, string, string][],
+    modelBoundary:
+      "不直接编辑、替换或软链接 ~/.codex/memories/。它是 Codex 管理的生成状态；MindBridge 通过导入器和 MCP 在边界外完成融合。",
     archTitle: "技术结构",
     archNote:
       "Python · FastAPI · Qwen2.5-3B 4-bit + MLX LoRA · MLX-LM · MCP · Postgres/pgvector · Redis · Docker",
@@ -375,22 +463,33 @@ const copy = {
   },
   en: {
     htmlLang: "en",
-    docTitle: "MindBridge — remember change, not just facts",
+    docTitle: "MindBridge — memory that knows you changed",
     docDesc:
       "A reflective AI companion with a transparent temporal Memory Core: trace what stayed, what changed, and what should no longer define you.",
-    nav: ["Two capture paths", "Architecture", "Metrics"],
+    nav: ["Use with Codex", "How memory works", "Evidence"],
     demo: "Try the Companion Loop",
     stage: "2-minute interactive synthetic demo",
-    heroNote: "An old memory should not define who you are now.",
+    heroNote: "Your AI should remember you — and remember that you changed.",
     title: (
       <>
-        Remember change—
+        Give AI a memory
         <br />
-        not just <em>facts</em>.
+        that knows you <em>changed</em>.
       </>
     ),
-    lede: "MindBridge is a reflective AI companion. It does not let wrong or outdated memories define you: every long-term memory can show its source, date, and what later changed. The Memory Core underneath is local-first.",
-    learn: "Inspect the Memory Core",
+    lede: "MindBridge gives Codex and other AI tools a traceable long-term memory. Every recall carries its source and date. When a preference changes, an old record no longer pretends to be the current you. The Memory Core runs locally by default.",
+    learn: "Use it with Codex",
+    proofEyebrow: "See the product before the architecture",
+    proofTitle: "One card captures today. One timeline explains change.",
+    proofNote:
+      "MindBridge turns scattered conversations into memory you can revisit, recall, and audit — without stuffing the full chat history back into every prompt.",
+    principlesEyebrow: "What makes this memory trustworthy",
+    principlesTitle: "Every recall answers three questions.",
+    principles: [
+      ["Where did it come from?", "Memory ids and source records lead you back to the evidence.", "SOURCE"],
+      ["When was it true?", "created_at records the write; valid_at tells you whether it still applies.", "TIME"],
+      ["What changed later?", "A new preference supersedes conflicts. History stays visible without defining the present.", "CHANGE"],
+    ] as [string, string, string][],
     cardDate: "2026-08-04 · Tue",
     cardMeta: "auto-generated",
     cardTitle: "Today's memory card",
@@ -429,9 +528,9 @@ const copy = {
       built: true,
       name: "Active MCP read/write",
       note: "Mounted as a standard MCP server, so the model decides mid-conversation when to write and when to recall.",
-      sources: ["upsert_preference", "temporal_query"],
+      sources: ["get_daily_card", "review_long_term_memory", "temporal_query", "upsert_preference"],
     },
-    laneBClients: "Claude Desktop · Claude Code · Cursor · VS Code",
+    laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge memory layer",
     storeTiers: [
       ["T1", "Session buffer — today's raw turns"],
@@ -456,17 +555,97 @@ const copy = {
     codexTitle: "Not just a web mockup. MindBridge now runs inside Codex.",
     codexNote:
       "Codex starts MindBridge over local STDIO MCP and calls the same MemoryService in real time: reads can run directly, while durable writes require user confirmation. The data layer is local Postgres / pgvector, Redis and Ollama.",
-    codexProof: "Local verification on Aug 19, 2026: a fresh Codex session recalled three real T3 memories and cited their memory ids.",
+    codexProof: "Local verification on Aug 19, 2026: a fresh Codex session read real T2 card [294] and T3 memories [329] [328] [327] separately, without writing anything.",
     codexSteps: [
       ["01", "Paste the install instruction below into Codex"],
       ["02", "After local setup finishes, open a fresh session"],
-      ["03", "Query, confirm a write, then inspect ids across sessions"],
+      ["03", "Review T2 and T3 separately, then confirm durable writes only when needed"],
     ] as [string, string][],
-    codexPrompt: "Call MindBridge and tell me what writing preferences you remember. Cite the memory ids.",
+    codexPrompt: "Call get_daily_card for the latest T2 card, then review_long_term_memory for the newest three T3 records. Answer in separate sections, cite every id, and do not write.",
     codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally and connect it to this Codex client.",
     codexCopy: "Copy install instruction",
     codexCopied: "Copied — paste it into Codex",
+    codexGuide: "Open the full install and usage guide",
     codexBoundary: "Verified locally, not a public hosted memory service; the local data layer must be running. The public Companion Loop uses synthetic data.",
+    usageEyebrow: "FOUR STEPS INSIDE CODEX",
+    usageTitle: "Review today before deciding what should last.",
+    usageNote:
+      "T2 answers “what did I do today?” T3 answers “how should AI understand me later?” The read paths stay separate; only the final step asks for write approval.",
+    usageItems: [
+      [
+        "01 · Review today (T2)",
+        "Read facts, observed work and open threads from a day card without turning them into durable traits.",
+        "Call get_daily_card for the latest T2 card. Cite the card id and summarize completed work and open threads.",
+      ],
+      [
+        "02 · Audit memory (T3)",
+        "List current and superseded long-term records instead of seeing only semantic search hits.",
+        "Call review_long_term_memory for the newest ten T3 records. Separate current from superseded and cite every id.",
+      ],
+      [
+        "03 · Work with context",
+        "Recall only the T3 records relevant to the current task, with provenance attached.",
+        "Use temporal_query for my writing preferences, cite the memory ids, then edit this essay.",
+      ],
+      [
+        "04 · Confirm before saving",
+        "Keep one-off instructions in the task; write only stable preferences that should matter again.",
+        "Use upsert_preference to remember: start technical explanations with a concrete example. Ask me before writing.",
+      ],
+    ] as [string, string, string][],
+    trustEyebrow: "Trust boundaries",
+    trustTitle: "Local-first should be specific, not vague.",
+    trustNote:
+      "Default behaviour, optional external processing, and unsupported scope are stated together.",
+    trustItems: [
+      ["Local by default", "Transcript parsing, Postgres / pgvector, Redis, and retrieval run on your device."],
+      ["Hosted extraction is explicit", "A hosted model is optional for training-data generation; no excerpt leaves without --send-to-provider."],
+      ["The public demo is synthetic", "Companion Loop contains no personal corpus. Local verification and the public demo are kept distinct."],
+      ["Codex native Memories are not merged yet", "Today, Codex connects over MCP. A single source of truth requires an audited migration, not direct edits to ~/.codex/memories/."],
+    ] as [string, string][],
+    evidenceEyebrow: "Reproducible evidence",
+    evidenceTitle: "Only results we can rerun and explain.",
+    evidenceNote:
+      "Every number comes from eval scripts and results.json in the repository. Small samples stay labelled as pilots; a feature without a safe threshold stays off.",
+    evidenceLink: "Inspect eval scripts and raw results",
+    finalEyebrow: "Connect your workflow",
+    finalTitle: "Next time Codex opens, let it ask: is this still true about you?",
+    finalNote:
+      "Start the local Memory Core, connect it over MCP, then run one query with memory ids to inspect what it remembers.",
+    finalPrimary: "Install for Codex",
+    finalSecondary: "Open the synthetic demo",
+    modelEyebrow: "RECOMMENDED MEMORY MODEL",
+    modelTitle: "MindBridge as the source of truth; Codex as an MCP client.",
+    modelNote:
+      "This is the recommended direction, not a shipped replacement for native Codex Memories. A reviewed one-time import followed by disabling native generation and injection creates one logical source of truth.",
+    modelStatus: "RECOMMENDED · ONE MIGRATION REQUIRED",
+    modelProsLabel: "What you gain",
+    modelConsLabel: "What you accept",
+    modelPros: [
+      "The same memory ids across Codex, Claude and Cursor",
+      "Preference changes retain created_at / valid_at history",
+      "Recall, writes, dedup and approvals share one MemoryService",
+    ],
+    modelCons: [
+      "Local MCP, Postgres and Ollama must be available",
+      "Existing Codex Memories need a reviewed import and dedup pass",
+      "Required rules still belong in AGENTS.md, not only in memory",
+    ],
+    alternativesTitle: "Two other operating modes",
+    alternatives: [
+      [
+        "Keep both stores",
+        "WORKS TODAY",
+        "Run native Codex Memories and MindBridge independently. There is no migration and native injection stays available, but duplicates, conflicts and two provenance systems remain.",
+      ],
+      [
+        "One-way import",
+        "SAFER TRANSITION",
+        "Periodically import generated Codex memories into MindBridge without writing back to Codex files. History is preserved and sync loops are avoided, but two physical stores remain until native memory is disabled.",
+      ],
+    ] as [string, string, string][],
+    modelBoundary:
+      "Do not edit, replace or symlink ~/.codex/memories/. It is Codex-managed generated state; MindBridge integrates outside that boundary through an importer and MCP.",
     archTitle: "Architecture",
     archNote:
       "Python · FastAPI · Qwen2.5-3B 4-bit + MLX LoRA · MLX-LM · MCP · Postgres/pgvector · Redis · Docker",
@@ -587,128 +766,23 @@ function GithubButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function Waitlist({ locale }: { locale: Locale }) {
-  const t = copy[locale];
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("");
-  const [trap, setTrap] = useState("");
-  const [state, setState] = useState<"idle" | "sending" | "ok" | "bad" | "err">(
-    "idle",
-  );
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (state === "sending") return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
-      setState("bad");
-      return;
-    }
-    // Honeypot: a filled hidden field means a bot. Show success, send nothing.
-    if (trap) {
-      setState("ok");
-      setEmail("");
-      return;
-    }
-    setState("sending");
-    try {
-      const response = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role, locale }),
-      });
-      if (!response.ok) throw new Error(String(response.status));
-      setState("ok");
-      setEmail("");
-      setRole("");
-    } catch {
-      setState("err");
-    }
-  }
-
-  const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-    "MindBridge developer preview",
-  )}&body=${encodeURIComponent(
-    locale === "zh"
-      ? `想预约 MindBridge 的上手演示。\n邮箱：${email}\n身份：${role}`
-      : `I would like a MindBridge walkthrough.\nEmail: ${email}\nRole: ${role}`,
-  )}`;
-
-  return (
-    <form onSubmit={submit} noValidate>
-      <div className="field">
-        <label htmlFor="wl-email">{t.emailLabel}</label>
-        <input
-          id="wl-email"
-          type="email"
-          name="email"
-          autoComplete="email"
-          placeholder={t.emailPlaceholder}
-          value={email}
-          onChange={(event) => {
-            setEmail(event.target.value);
-            if (state === "bad" || state === "err") setState("idle");
-          }}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="wl-role">{t.roleLabel}</label>
-        <select
-          id="wl-role"
-          name="role"
-          value={role}
-          onChange={(event) => setRole(event.target.value)}
-        >
-          <option value="">{t.roles[0]}</option>
-          {t.roles.slice(1).map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="honeypot" aria-hidden="true">
-        <label htmlFor="wl-company">Company</label>
-        <input
-          id="wl-company"
-          name="company"
-          tabIndex={-1}
-          autoComplete="off"
-          value={trap}
-          onChange={(event) => setTrap(event.target.value)}
-        />
-      </div>
-      <button
-        className="store-button"
-        type="submit"
-        disabled={state === "sending"}
-      >
-        <PaperPlaneTilt weight="fill" />
-        <span>{state === "sending" ? t.submitting : t.submit}</span>
-      </button>
-      <p
-        className={`form-status ${state === "ok" ? "ok" : ""} ${
-          state === "bad" || state === "err" ? "err" : ""
-        }`}
-        aria-live="polite"
-      >
-        {state === "ok" && t.ok}
-        {state === "bad" && t.errEmail}
-        {state === "err" && (
-          <>
-            {t.errServer} <a href={mailto}>{t.mailtoFallback}</a>
-          </>
-        )}
-      </p>
-    </form>
-  );
-}
-
 /* --- page --------------------------------------------------------------- */
 
-export function Landing() {
-  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+export function Landing({ locale }: { locale: Locale }) {
   const [installCopied, setInstallCopied] = useState(false);
   const t = copy[locale];
+  const evidenceRows = benchRows.filter((row) =>
+    [
+      "decayOrdering",
+      "supersedeExclusion",
+      "extractionJsonAccuracy",
+      "localExtractionCostDelta",
+    ].includes(row.key),
+  );
+
+  useEffect(() => {
+    document.documentElement.lang = t.htmlLang;
+  }, [t.htmlLang]);
 
   return (
     <main className="site-page" lang={t.htmlLang}>
@@ -718,18 +792,14 @@ export function Landing() {
           MindBridge
         </a>
         <nav aria-label={locale === "zh" ? "主导航" : "Main navigation"}>
-          <a href="#paths">{t.nav[0]}</a>
-          <a href="#arch">{t.nav[1]}</a>
+          <a href="#codex-live">{t.nav[0]}</a>
+          <a href="#paths">{t.nav[1]}</a>
           <a href="#metrics">{t.nav[2]}</a>
         </nav>
         <div className="nav-actions">
-          <button
-            className="language"
-            type="button"
-            onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
-          >
+          <Link className="language" href={locale === "zh" ? "/en" : "/"}>
             {locale === "zh" ? "EN" : "中文"}
-          </button>
+          </Link>
           <GithubButton compact />
         </div>
       </header>
@@ -747,145 +817,74 @@ export function Landing() {
                 {t.demo}
               </span>
             </Link>
-            <a className="text-link" href="#paths">
+            <a className="text-link" href="#codex-live">
               {t.learn} <ArrowRight />
             </a>
           </div>
         </div>
 
-        <div className="phones">
-          <div className="phone-slot">
-            <div className="phone">
-              <div className="speaker" />
-              <div className="screen paper">
-                <p className="screen-date">
-                  <span>{t.cardDate}</span>
-                  <span>{t.cardMeta}</span>
-                </p>
-                <h3>{t.cardTitle}</h3>
-                <ul className="card-list">
-                  {t.cardItems.map((item) => (
-                    <li key={item}>
-                      <Check weight="bold" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="screen-date">
-                  <span>{t.cardPillLabel}</span>
-                </p>
-                <div className="pills">
-                  {t.cardPills.map((pill) => (
-                    <span key={pill}>{pill}</span>
-                  ))}
-                </div>
-                <p className="card-scribble">{t.cardScribble}</p>
-                <p className="screen-source">
-                  <FileCode weight="fill" />
-                  {t.cardSource}
-                </p>
-              </div>
-            </div>
-            <p className="phone-callout">{t.cardCallout}</p>
+        <div className="hero-showcase">
+          <div className="showcase-intro">
+            <p className="eyebrow">{t.proofEyebrow}</p>
+            <h2>{t.proofTitle}</h2>
+            <p>{t.proofNote}</p>
           </div>
-
-          <div className="phone-slot">
-            <div className="phone">
-              <div className="speaker" />
-              <div className="screen ink">
-                <h3>{t.timelineTitle}</h3>
-                {t.timelineRows.map(([text, meta, weight, faded]) => (
-                  <div className={`mem-row ${faded ? "faded" : ""}`} key={text}>
-                    <p>{text}</p>
-                    <small>{meta}</small>
-                    <span className="decay-bar">
-                      <i style={{ width: `${weight * 100}%` }} />
-                    </span>
+          <div className="phones">
+            <div className="phone-slot">
+              <div className="phone">
+                <div className="speaker" />
+                <div className="screen paper">
+                  <p className="screen-date">
+                    <span>{t.cardDate}</span>
+                    <span>{t.cardMeta}</span>
+                  </p>
+                  <h3>{t.cardTitle}</h3>
+                  <ul className="card-list">
+                    {t.cardItems.map((item) => (
+                      <li key={item}>
+                        <Check weight="bold" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="screen-date">
+                    <span>{t.cardPillLabel}</span>
+                  </p>
+                  <div className="pills">
+                    {t.cardPills.map((pill) => (
+                      <span key={pill}>{pill}</span>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-            <p className="phone-callout">{t.timelineCallout}</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="paths" className="paths shell">
-        <div className="how-heading">
-          <p className="eyebrow">{t.pathsTitle}</p>
-          <p>{t.pathsNote}</p>
-        </div>
-
-        <div className="paths-grid">
-          <div className="lane-stack">
-            {[t.laneA, t.laneB].map((lane, index) => (
-              <div className="lane" key={lane.tag}>
-                <div className="lane-head">
-                  {index === 0 ? (
+                  <p className="card-scribble">{t.cardScribble}</p>
+                  <p className="screen-source">
                     <FileCode weight="fill" />
-                  ) : (
-                    <PlugsConnected weight="fill" />
-                  )}
-                  <strong>{lane.name}</strong>
-                  <em>{lane.tag}</em>
-                  <span className={`lane-status ${lane.built ? "built" : ""}`}>
-                    {lane.status}
-                  </span>
+                    {t.cardSource}
+                  </p>
                 </div>
-                <p>{lane.note}</p>
-                <div className="lane-sources">
-                  {lane.sources.map((source) => (
-                    <code key={source}>{source}</code>
+              </div>
+              <p className="phone-callout">{t.cardCallout}</p>
+            </div>
+
+            <div className="phone-slot">
+              <div className="phone">
+                <div className="speaker" />
+                <div className="screen ink">
+                  <h3>{t.timelineTitle}</h3>
+                  {t.timelineRows.map(([text, meta, weight, faded]) => (
+                    <div className={`mem-row ${faded ? "faded" : ""}`} key={text}>
+                      <p>{text}</p>
+                      <small>{meta}</small>
+                      <span className="decay-bar">
+                        <i style={{ width: `${weight * 100}%` }} />
+                      </span>
+                    </div>
                   ))}
-                  {index === 1 && <code>{t.laneBClients}</code>}
                 </div>
               </div>
-            ))}
-          </div>
-
-          <div className="merge" aria-hidden="true">
-            <Path weight="bold" />
-          </div>
-
-          <div className="store">
-            <strong>{t.storeTitle}</strong>
-            {t.storeTiers.map(([tier, label]) => (
-              <span className="store-tier" key={tier}>
-                <b>{tier}</b>
-                {label}
-              </span>
-            ))}
-          </div>
-
-          <div className="merge" aria-hidden="true">
-            <CaretRight weight="bold" />
-          </div>
-
-          <div className="outputs">
-            {t.outputs.map(([title, note, Icon]) => (
-              <div className="output" key={title}>
-                <div className="lane-head">
-                  <Icon weight="fill" />
-                  <strong>{title}</strong>
-                </div>
-                <small>{note}</small>
-              </div>
-            ))}
+              <p className="phone-callout">{t.timelineCallout}</p>
+            </div>
           </div>
         </div>
-
-        <p className="local-note">
-          <ShieldCheck weight="bold" />
-          {t.localNote}
-        </p>
-        <p className="local-note" style={{ fontWeight: 400, color: "#a9bfdc" }}>
-          <Laptop weight="bold" />
-          {t.coverage}
-        </p>
-        <p className="local-note" style={{ fontWeight: 400, color: "#a9bfdc" }}>
-          <Warning weight="bold" />
-          {t.extractorNote}
-        </p>
       </section>
 
       <section className="codex-live shell" id="codex-live">
@@ -897,6 +896,9 @@ export function Landing() {
             <Check weight="bold" />
             {t.codexProof}
           </span>
+          <a className="text-link codex-guide" href="/install.md" target="_blank">
+            {t.codexGuide} <ArrowRight />
+          </a>
         </div>
         <div className="codex-terminal">
           <div className="codex-terminal-head">
@@ -926,93 +928,154 @@ export function Landing() {
         </div>
       </section>
 
-      <section id="arch" className="arch shell">
+      <section className="codex-usage shell" aria-labelledby="codex-usage-title">
         <div className="how-heading">
-          <p className="eyebrow">{t.archTitle}</p>
-          <p>{t.archNote}</p>
+          <div>
+            <p className="eyebrow">{t.usageEyebrow}</p>
+            <h2 id="codex-usage-title">{t.usageTitle}</h2>
+          </div>
+          <p>{t.usageNote}</p>
         </div>
-        <div className="arch-grid">
-          {t.arch.map(([title, items]) => (
-            <div className="arch-col" key={title}>
-              <h3>{title}</h3>
-              <ul>
-                {items.map((item, index) => (
-                  <li key={index}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-        <p className="arch-flow">
-          {[
-            "jsonl / MCP",
-            "T1",
-            locale === "zh" ? "抽取" : "extract",
-            locale === "zh" ? "cosine 去重" : "cosine dedup",
-            "pgvector",
-            "temporal_query",
-            locale === "zh" ? "记忆卡" : "memory card",
-          ].map((node, index, all) => (
-            <span key={node} style={{ display: "inline-flex", gap: 9 }}>
-              {node}
-              {index < all.length - 1 && <CaretRight weight="bold" />}
-            </span>
-          ))}
-        </p>
-      </section>
-
-      <section id="metrics" className="bench shell">
-        <p className="eyebrow">{t.benchEyebrow}</p>
-        <h2>{t.benchTitle}</h2>
-        <p className="bench-note">{t.benchNote}</p>
-        <div className="bench-table">
-          {benchRows.map((row) => {
-            const value =
-              row.key === "cacheCostSaving"
-                ? t.cacheVerdict
-                : results.metrics[row.key];
+        <div className="usage-grid">
+          {t.usageItems.map(([title, note, prompt], index) => {
+            const Icon = [Book, Sparkle, Path, ShieldCheck][index];
             return (
-              <div className="bench-row" key={row.key}>
-                <strong>{row[locale]}</strong>
-                <p>{locale === "zh" ? row.zhHow : row.enHow}</p>
-                {value ? (
-                  <span className="bench-value">{value}</span>
-                ) : (
-                  <span className="bench-pending">
-                    <Hourglass weight="fill" />
-                    {t.pending}
-                  </span>
-                )}
-              </div>
+              <article className="usage-card" key={title}>
+                <span className="usage-icon"><Icon weight="fill" /></span>
+                <h3>{title}</h3>
+                <p>{note}</p>
+                <code>{prompt}</code>
+              </article>
             );
           })}
         </div>
-        <p className="honesty">
-          <ShieldCheck weight="bold" />
-          {t.honesty}
-        </p>
       </section>
 
-      <section id="book" className="waitlist shell">
-        <div>
-          <p className="eyebrow">{t.bookEyebrow}</p>
-          <h2>{t.bookTitle}</h2>
-          <p>{t.bookNote}</p>
-        </div>
-        <Waitlist locale={locale} />
-      </section>
-
-      <section className="modes shell">
-        {t.modes.map(([title, note, Icon], index) => (
-          <div key={title}>
-            <Icon weight="fill" />
-            <span>
-              <small>0{index + 1}</small>
-              <strong>{title}</strong>
-              <em>{note}</em>
-            </span>
+      <section className="principles shell" aria-labelledby="principles-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{t.principlesEyebrow}</p>
+            <h2 id="principles-title">{t.principlesTitle}</h2>
           </div>
-        ))}
+        </div>
+        <div className="principles-grid">
+          {t.principles.map(([title, note, label], index) => (
+            <article key={title}>
+              <span>0{index + 1} · {label}</span>
+              <h3>{title}</h3>
+              <p>{note}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="paths" className="paths shell">
+        <div className="how-heading">
+          <p className="eyebrow">{t.pathsTitle}</p>
+          <p>{t.pathsNote}</p>
+        </div>
+
+        <div className="paths-grid">
+          <div className="lane-stack">
+            {[t.laneA, t.laneB].map((lane, index) => (
+              <div className="lane" key={lane.tag}>
+                <div className="lane-head">
+                  {index === 0 ? <FileCode weight="fill" /> : <PlugsConnected weight="fill" />}
+                  <strong>{lane.name}</strong>
+                  <em>{lane.tag}</em>
+                  <span className={`lane-status ${lane.built ? "built" : ""}`}>
+                    {lane.status}
+                  </span>
+                </div>
+                <p>{lane.note}</p>
+                <div className="lane-sources">
+                  {lane.sources.map((source) => <code key={source}>{source}</code>)}
+                  {index === 1 && <code>{t.laneBClients}</code>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="merge" aria-hidden="true"><Path weight="bold" /></div>
+          <div className="store">
+            <strong>{t.storeTitle}</strong>
+            {t.storeTiers.map(([tier, label]) => (
+              <span className="store-tier" key={tier}><b>{tier}</b>{label}</span>
+            ))}
+          </div>
+          <div className="merge" aria-hidden="true"><CaretRight weight="bold" /></div>
+          <div className="outputs">
+            {t.outputs.map(([title, note, Icon]) => (
+              <div className="output" key={title}>
+                <div className="lane-head"><Icon weight="fill" /><strong>{title}</strong></div>
+                <small>{note}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="path-notes">
+          <p className="local-note"><ShieldCheck weight="bold" />{t.localNote}</p>
+          <p className="local-note"><Laptop weight="bold" />{t.coverage}</p>
+        </div>
+      </section>
+
+      <section className="trust shell" aria-labelledby="trust-title">
+        <div className="section-heading split">
+          <div>
+            <p className="eyebrow">{t.trustEyebrow}</p>
+            <h2 id="trust-title">{t.trustTitle}</h2>
+          </div>
+          <p>{t.trustNote}</p>
+        </div>
+        <div className="trust-grid">
+          {t.trustItems.map(([title, note], index) => (
+            <article key={title}>
+              {index === 0 ? <ShieldCheck weight="fill" /> : <Warning weight="fill" />}
+              <div><h3>{title}</h3><p>{note}</p></div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="metrics" className="evidence shell">
+        <div className="section-heading split">
+          <div>
+            <p className="eyebrow">{t.evidenceEyebrow}</p>
+            <h2>{t.evidenceTitle}</h2>
+          </div>
+          <p>{t.evidenceNote}</p>
+        </div>
+        <div className="evidence-grid">
+          {evidenceRows.map((row) => (
+            <article key={row.key}>
+              <strong>{results.metrics[row.key] ?? t.pending}</strong>
+              <span>{row[locale]}</span>
+            </article>
+          ))}
+          <article className="evidence-off">
+            <strong>{t.cacheVerdict}</strong>
+            <span>{locale === "zh" ? "语义近邻缓存" : "Semantic neighbour cache"}</span>
+          </article>
+        </div>
+        <a className="text-link evidence-link" href={`${GITHUB_URL}/tree/main/evals`} target="_blank" rel="noreferrer">
+          {t.evidenceLink} <ArrowRight />
+        </a>
+      </section>
+
+      <section className="final-cta shell">
+        <div>
+          <p className="eyebrow">{t.finalEyebrow}</p>
+          <h2>{t.finalTitle}</h2>
+          <p>{t.finalNote}</p>
+        </div>
+        <div className="final-actions">
+          <a className="store-button" href="/install.md" target="_blank">
+            <PlugsConnected weight="fill" />
+            <span><small>MindBridge MCP</small>{t.finalPrimary}</span>
+          </a>
+          <Link className="text-link" href={locale === "zh" ? "/interview-demo/zh" : "/interview-demo"}>
+            {t.finalSecondary} <ArrowRight />
+          </Link>
+        </div>
       </section>
 
       <footer className="site-footer shell">
