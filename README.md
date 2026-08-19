@@ -267,6 +267,21 @@ and `POST /memories` over HTTP cannot drift apart.
 | `POST /patterns/{id}/resolve` | Reflection | confirm/edit into reflective T3, or reject |
 | `GET /daily-review` | Companion | one review surface across T2, T3 and candidates |
 
+### Pattern Candidate discovery (deterministic)
+
+Rule-based candidate discovery now turns repeated T2 facts into reviewable
+Pattern Candidates with no model in the loop:
+
+```bash
+.venv/bin/python -m scripts.suggest_patterns --since 30d
+# add --apply to insert pending candidates into Postgres
+```
+
+The scanner currently extracts repeatable signals from deterministic facts such as
+project touches, tool usage, git branches, source labels and late-hour work.
+It enforces the same safety gate as manual proposals:
+at least 3 supporting observations across at least 2 distinct dates.
+
 Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files
 had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,
 with 8 suspected secrets masked. A second run read 2 files; `--full` re-read all
