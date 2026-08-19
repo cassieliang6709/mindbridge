@@ -19,7 +19,7 @@ export type Locale = "zh" | "en";
  * material to parse, not a hypothetical feed. Refresh with:
  *   find ~/.claude/projects -maxdepth 1 -type d | wc -l   # projects
  *   find ~/.claude/projects -name '*.jsonl' | wc -l       # transcripts
- * Codex rollouts (~/.codex/archived_sessions/rollout-*.jsonl) are a second
- * source and are not folded into these two claude-code figures.
+ * Active and archived Codex rollouts are a second source and are not folded
+ * into these two claude-code figures.
  */
 export const LOCAL_CORPUS = { projects: 38, transcripts: 243 };

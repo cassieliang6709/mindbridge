@@ -1,4 +1,4 @@
-"""Reader for Codex CLI rollouts: ~/.codex/archived_sessions/rollout-*.jsonl
+"""Reader for Codex CLI rollouts in both active and archived session folders.
 
 Observed shape (confirmed against local files, 2026-08) — a flat envelope,
 unlike Claude Code's:
@@ -44,7 +44,7 @@ _ROLES = {"user": "user", "assistant": "assistant"}
 
 
 def default_root() -> Path:
-    return Path.home() / ".codex" / "archived_sessions"
+    return Path.home() / ".codex"
 
 
 def session_id_for(path: Path) -> str:
@@ -201,4 +201,12 @@ def discover(root: Path | None = None) -> list[Path]:
     root = root or default_root()
     if not root.exists():
         return []
-    return sorted(root.glob("rollout-*.jsonl"))
+    # Keep the flat glob for callers that still pass ~/.codex/archived_sessions
+    # directly. The default root is ~/.codex so new, still-active sessions and
+    # archived sessions enter the same source without exposing any other file.
+    paths = {
+        *root.glob("rollout-*.jsonl"),
+        *root.glob("archived_sessions/rollout-*.jsonl"),
+        *root.glob("sessions/**/rollout-*.jsonl"),
+    }
+    return sorted(paths)

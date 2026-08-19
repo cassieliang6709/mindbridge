@@ -179,7 +179,8 @@ services:
       - ./api:/app/api
       - ./ingest:/app/ingest
       - ${HOME}/.claude/projects:/transcripts/claude:ro
-      - ${HOME}/.codex/archived_sessions:/transcripts/codex:ro
+      - ${HOME}/.codex/archived_sessions:/transcripts/codex/archived_sessions:ro
+      - ${HOME}/.codex/sessions:/transcripts/codex/sessions:ro
     depends_on:
       db:
         condition: service_healthy

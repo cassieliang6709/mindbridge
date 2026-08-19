@@ -191,7 +191,7 @@ const copy = {
     docTitle: "MindBridge — 让 AI 记得你，也记得你已经改变",
     docDesc:
       "MindBridge 是一款反思型 AI Companion：它用透明、可追溯、能识别变化的 Memory Core，帮助你看见什么没变、什么已经改变。",
-    nav: ["在 Codex 中使用", "它如何记忆", "实验依据"],
+    nav: ["在编程 Agent 中使用", "它如何记忆", "实验依据"],
     demo: "试试 Companion Loop",
     stage: "2 分钟可点击合成演示",
     heroNote: "你的 AI 记得你，也记得你已经改变。",
@@ -203,7 +203,7 @@ const copy = {
       </>
     ),
     lede: "MindBridge 为 Codex 等 AI 工具提供一层可追溯的长期记忆：operational T3 记住怎样更好地和你工作，reflective T3 只保存你确认过的模式与身份假设。每次召回都带来源和时间，Memory Core 默认在本地运行。",
-    learn: "在 Codex 中使用",
+    learn: "连接 Codex / Claude Code",
     proofEyebrow: "先看见产品，再理解架构",
     proofTitle: "一张卡片记录今天；一条时间轴解释变化。",
     proofNote:
@@ -247,7 +247,7 @@ const copy = {
       built: true,
       name: "被动日志解析",
       note: "不需要你做任何事。增量解析本地结构化日志，按天算出真正发生了什么；写入前先遮蔽疑似密钥。",
-      sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/archived_sessions/"],
+      sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/sessions/** + archived_sessions/"],
     },
     laneB: {
       tag: "路径 B",
@@ -275,22 +275,45 @@ const copy = {
     coverage:
       "覆盖范围说清楚：路径 A 只对有本地结构化日志的工具成立（Claude Code、Codex CLI）；路径 B 对任意 MCP 客户端成立。ChatGPT 与网页版 Claude 的历史没有 API，只能手动导出，不在自动范围内。",
     codexEyebrow: "已接入真实客户端",
-    codexTitle: "不只展示页面。MindBridge 已经跑在 Codex 里。",
+    codexTitle: "不只展示页面。MindBridge 已经跑在 Codex 和 Claude Code 里。",
     codexNote:
-      "Codex 通过本地 STDIO MCP 启动 MindBridge，实时调用同一个 MemoryService：查询可以直接执行，长期写入需要用户确认。数据层是本机 Postgres / pgvector、Redis 与 Ollama。",
-    codexProof: "2026-08-19 本机验证：新 Codex 会话分别读取真实 T2 日卡 [294] 与 T3 记忆 [329] [328] [327]，全程没有写入。",
+      "Codex 与 Claude Code 都通过本地 STDIO MCP 调用同一个 MemoryService；两边的本地 JSONL 也增量写入同一个 T1/T2 store。查询可以直接执行，长期写入需要用户确认。",
+    codexProof: "2026-08-20 本机验证：全新 Claude Code 会话真实调用 get_daily_review 并收到四层结果；三类本地日志进入同一个 Postgres，source_key 重复数为 0。",
     codexSteps: [
-      ["01", "把下面的安装指令粘贴进 Codex"],
-      ["02", "Codex 完成本地安装后，新开一个会话"],
+      ["01", "把下面的安装指令粘贴进 Codex 或 Claude Code"],
+      ["02", "安装完成后，在对应客户端新开一个会话"],
       ["03", "先分开查看 T2 / T3，再按需确认长期写入"],
     ] as [string, string][],
     codexPrompt: "调用 MindBridge 的 get_daily_card 读取最新 T2，再用 review_long_term_memory 读取最新 3 条 T3。分开回答并标注 ids，不要写入。",
-    codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally and connect it to this Codex client.",
+    codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally, connect Codex and Claude Code, and ingest both local transcript sources.",
     codexCopy: "复制安装指令",
     codexCopied: "已复制，粘贴进 Codex",
     codexGuide: "查看完整安装与使用指南",
     codexBoundary: "本机验证，不是公网托管服务；需要本地数据层运行。公开 Companion Loop 使用合成数据。",
-    usageEyebrow: "在 Codex 里的五步用法",
+    setupEyebrow: "安装与运行环境",
+    setupTitle: "先安装 Claude Code，再把 MindBridge 接到同一台设备。",
+    setupNote:
+      "Claude Code 负责交互，MindBridge 在本机运行 MCP、Postgres / Redis 与 embedding。下面把官方最低要求和这台真实验证设备分开写清楚。",
+    setupRequirements: [
+      ["Claude Code 官方最低要求", "macOS 13+；Windows 10 1809+；Ubuntu 20.04+ / Debian 10+。4 GB+ RAM，x64 或 ARM64，并保持联网。"],
+      ["账户要求", "Claude Pro、Max、Team、Enterprise 或 Console。Claude Free 方案目前不包含 Claude Code。"],
+      ["MindBridge 额外运行层", "Git · Python 3.11+ · Docker · Ollama。本机 Postgres / Redis 保存分层记忆，nomic-embed-text 生成本地 embedding。"],
+    ] as [string, string][],
+    setupCommands: [
+      ["macOS / Linux / WSL · 官方推荐的 native installer", "curl -fsSL https://claude.ai/install.sh | bash"],
+      ["Windows PowerShell", "irm https://claude.ai/install.ps1 | iex"],
+      ["验证 Claude Code", "claude --version && claude doctor"],
+      ["连接 MindBridge", "scripts/install-claude-mcp.sh && claude mcp list"],
+    ] as [string, string][],
+    setupDeviceTitle: "当前真实验证设备 · 2026-08-20",
+    setupDeviceFacts: [
+      "MacBook Pro · Apple M1 Pro 8-core · 16 GB RAM",
+      "macOS 26.5.2 · arm64 · 验证时可用磁盘 122 GiB",
+      "Claude Code 2.1.226 · MindBridge Python 3.12.13",
+      "Docker 29.2.1 · Ollama 0.32.5 · Postgres / Redis healthy",
+    ],
+    setupOfficial: "查看 Claude Code 官方安装与系统要求",
+    usageEyebrow: "在 Codex / Claude Code 里的五步用法",
     usageTitle: "先看今天，再区分工作偏好与关于自己的假设。",
     usageNote:
       "Daily Review 同时显示 T2、operational T3、reflective T3 与待确认 Pattern Candidate。推断必须先留在候选层；只有用户确认后才能进入 reflective T3。",
@@ -337,10 +360,10 @@ const copy = {
       "所有数字来自仓库中的 eval 脚本与 results.json。样本小的结果会明确标成 pilot；没有安全阈值的功能就保持关闭。",
     evidenceLink: "查看评测脚本与原始结果",
     finalEyebrow: "把它接进你的工作流",
-    finalTitle: "下一次打开 Codex，让它先问问：你现在还是这样吗？",
+    finalTitle: "下一次打开 Codex 或 Claude Code，让它先问问：你现在还是这样吗？",
     finalNote:
       "按安装指南启动本地 Memory Core、连接 MCP，然后用一条带 memory ids 的查询检查它记住了什么。",
-    finalPrimary: "在 Codex 中安装",
+    finalPrimary: "连接两个编程 Agent",
     finalSecondary: "打开合成演示",
     modelEyebrow: "推荐的记忆架构",
     modelTitle: "MindBridge 做主存储，Codex 通过 MCP 使用。",
@@ -471,7 +494,7 @@ const copy = {
     docTitle: "MindBridge — memory that knows you changed",
     docDesc:
       "A reflective AI companion with a transparent temporal Memory Core: trace what stayed, what changed, and what should no longer define you.",
-    nav: ["Use with Codex", "How memory works", "Evidence"],
+    nav: ["Use with coding agents", "How memory works", "Evidence"],
     demo: "Try the Companion Loop",
     stage: "2-minute interactive synthetic demo",
     heroNote: "Your AI should remember you — and remember that you changed.",
@@ -483,7 +506,7 @@ const copy = {
       </>
     ),
     lede: "MindBridge gives Codex and other AI tools a traceable long-term memory: operational T3 remembers how to work with you, while reflective T3 stores only patterns and identity hypotheses you confirmed. Every recall carries its source and date. The Memory Core runs locally by default.",
-    learn: "Use it with Codex",
+    learn: "Connect Codex / Claude Code",
     proofEyebrow: "See the product before the architecture",
     proofTitle: "One card captures today. One timeline explains change.",
     proofNote:
@@ -525,7 +548,7 @@ const copy = {
       built: true,
       name: "Passive log parsing",
       note: "Nothing for you to do. An incremental pass reads the structured logs already on disk and computes what happened, masking suspected secrets before storing.",
-      sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/archived_sessions/"],
+      sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/sessions/** + archived_sessions/"],
     },
     laneB: {
       tag: "Path B",
@@ -557,22 +580,45 @@ const copy = {
     coverage:
       "Stated plainly: Path A only works for tools that already write structured local logs (Claude Code, Codex CLI). Path B works with any MCP client. ChatGPT and web Claude expose no history API — those need a manual export and are out of scope for the automatic path.",
     codexEyebrow: "VERIFIED IN A REAL CLIENT",
-    codexTitle: "Not just a web mockup. MindBridge now runs inside Codex.",
+    codexTitle: "Not just a web mockup. MindBridge now runs inside Codex and Claude Code.",
     codexNote:
-      "Codex starts MindBridge over local STDIO MCP and calls the same MemoryService in real time: reads can run directly, while durable writes require user confirmation. The data layer is local Postgres / pgvector, Redis and Ollama.",
-    codexProof: "Local verification on Aug 19, 2026: a fresh Codex session read real T2 card [294] and T3 memories [329] [328] [327] separately, without writing anything.",
+      "Codex and Claude Code call the same MemoryService over local STDIO MCP; their local JSONL logs also increment into one T1/T2 store. Reads can run directly, while durable writes require user confirmation.",
+    codexProof: "Local verification on Aug 20, 2026: a fresh Claude Code session called get_daily_review and received all four sections; three local log sources entered one Postgres store with zero duplicate source keys.",
     codexSteps: [
-      ["01", "Paste the install instruction below into Codex"],
-      ["02", "After local setup finishes, open a fresh session"],
+      ["01", "Paste the install instruction below into Codex or Claude Code"],
+      ["02", "After setup, open a fresh session in that client"],
       ["03", "Review T2 and T3 separately, then confirm durable writes only when needed"],
     ] as [string, string][],
     codexPrompt: "Call get_daily_card for the latest T2 card, then review_long_term_memory for the newest three T3 records. Answer in separate sections, cite every id, and do not write.",
-    codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally and connect it to this Codex client.",
+    codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally, connect Codex and Claude Code, and ingest both local transcript sources.",
     codexCopy: "Copy install instruction",
     codexCopied: "Copied — paste it into Codex",
     codexGuide: "Open the full install and usage guide",
     codexBoundary: "Verified locally, not a public hosted memory service; the local data layer must be running. The public Companion Loop uses synthetic data.",
-    usageEyebrow: "FIVE STEPS INSIDE CODEX",
+    setupEyebrow: "INSTALLATION & RUNTIME",
+    setupTitle: "Install Claude Code, then connect MindBridge on the same device.",
+    setupNote:
+      "Claude Code is the interaction surface; MindBridge runs MCP, Postgres / Redis and embeddings locally. Official minimums and the machine actually used for verification are listed separately.",
+    setupRequirements: [
+      ["Official Claude Code minimums", "macOS 13+; Windows 10 1809+; Ubuntu 20.04+ / Debian 10+. 4 GB+ RAM, x64 or ARM64, with an internet connection."],
+      ["Account", "Claude Pro, Max, Team, Enterprise or Console. The Claude Free plan currently does not include Claude Code."],
+      ["Additional MindBridge runtime", "Git · Python 3.11+ · Docker · Ollama. Local Postgres / Redis hold layered memory; nomic-embed-text creates local embeddings."],
+    ] as [string, string][],
+    setupCommands: [
+      ["macOS / Linux / WSL · recommended native installer", "curl -fsSL https://claude.ai/install.sh | bash"],
+      ["Windows PowerShell", "irm https://claude.ai/install.ps1 | iex"],
+      ["Verify Claude Code", "claude --version && claude doctor"],
+      ["Connect MindBridge", "scripts/install-claude-mcp.sh && claude mcp list"],
+    ] as [string, string][],
+    setupDeviceTitle: "Machine verified locally · Aug 20, 2026",
+    setupDeviceFacts: [
+      "MacBook Pro · Apple M1 Pro 8-core · 16 GB RAM",
+      "macOS 26.5.2 · arm64 · 122 GiB free at verification",
+      "Claude Code 2.1.226 · MindBridge Python 3.12.13",
+      "Docker 29.2.1 · Ollama 0.32.5 · Postgres / Redis healthy",
+    ],
+    setupOfficial: "Read the official Claude Code installation requirements",
+    usageEyebrow: "FIVE STEPS IN CODEX / CLAUDE CODE",
     usageTitle: "Review today, then separate work preferences from hypotheses about yourself.",
     usageNote:
       "Daily Review separates T2, operational T3, reflective T3, and pending Pattern Candidates. An inference stays outside memory until the user confirms its wording.",
@@ -619,10 +665,10 @@ const copy = {
       "Every number comes from eval scripts and results.json in the repository. Small samples stay labelled as pilots; a feature without a safe threshold stays off.",
     evidenceLink: "Inspect eval scripts and raw results",
     finalEyebrow: "Connect your workflow",
-    finalTitle: "Next time Codex opens, let it ask: is this still true about you?",
+    finalTitle: "Next time Codex or Claude Code opens, let it ask: is this still true about you?",
     finalNote:
       "Start the local Memory Core, connect it over MCP, then run one query with memory ids to inspect what it remembers.",
-    finalPrimary: "Install for Codex",
+    finalPrimary: "Connect both coding agents",
     finalSecondary: "Open the synthetic demo",
     modelEyebrow: "RECOMMENDED MEMORY MODEL",
     modelTitle: "MindBridge as the source of truth; Codex as an MCP client.",
@@ -912,7 +958,7 @@ export function Landing({ locale }: { locale: Locale }) {
         </div>
         <div className="codex-terminal">
           <div className="codex-terminal-head">
-            <span><PlugsConnected weight="fill" /> Codex × MindBridge</span>
+            <span><PlugsConnected weight="fill" /> Codex + Claude Code × MindBridge</span>
             <em>{locale === "zh" ? "本地已验证" : "LOCALLY VERIFIED"}</em>
           </div>
           <div className="codex-steps">
@@ -935,6 +981,51 @@ export function Landing({ locale }: { locale: Locale }) {
           </div>
           <code className="codex-prompt">{t.codexPrompt}</code>
           <small>{t.codexBoundary}</small>
+        </div>
+      </section>
+
+      <section className="client-setup shell" aria-labelledby="client-setup-title">
+        <div className="section-heading split setup-heading">
+          <div>
+            <p className="eyebrow">{t.setupEyebrow}</p>
+            <h2 id="client-setup-title">{t.setupTitle}</h2>
+          </div>
+          <p>{t.setupNote}</p>
+        </div>
+        <div className="setup-grid">
+          <div className="setup-panel requirement-panel">
+            {t.setupRequirements.map(([title, note]) => (
+              <article key={title}>
+                <Check weight="bold" />
+                <div><h3>{title}</h3><p>{note}</p></div>
+              </article>
+            ))}
+            <a
+              className="text-link setup-official"
+              href="https://code.claude.com/docs/en/installation"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t.setupOfficial} <ArrowRight />
+            </a>
+          </div>
+          <div className="setup-panel command-panel">
+            {t.setupCommands.map(([label, command]) => (
+              <div className="setup-command" key={label}>
+                <span>{label}</span>
+                <code>{command}</code>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="device-proof">
+          <div className="device-proof-title">
+            <Laptop weight="fill" />
+            <strong>{t.setupDeviceTitle}</strong>
+          </div>
+          <div className="device-facts">
+            {t.setupDeviceFacts.map((fact) => <span key={fact}>{fact}</span>)}
+          </div>
         </div>
       </section>
 

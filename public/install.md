@@ -1,7 +1,8 @@
-# Install MindBridge in Codex
+# Install MindBridge in Codex and Claude Code
 
-These instructions are for a Codex agent helping a user install MindBridge as
-a **local STDIO MCP server**. Read the entire guide before changing anything.
+These instructions are for a local coding agent helping a user install
+MindBridge as a **local STDIO MCP server**. Codex and Claude Code can share one
+local memory store. Read the entire guide before changing anything.
 
 ## Product and safety boundary
 
@@ -15,8 +16,19 @@ a **local STDIO MCP server**. Read the entire guide before changing anything.
 
 ## Requirements
 
-- macOS or Linux with Git, Python 3.11+, Docker, Ollama and Codex installed.
+- Claude Code supports macOS 13+, Windows 10 1809+ / Server 2019+, Ubuntu
+  20.04+, Debian 10+ and Alpine 3.19+ on x64 or ARM64 with 4 GB+ RAM and an
+  internet connection. See the
+  [official installation page](https://code.claude.com/docs/en/installation).
+- Claude Code requires Pro, Max, Team, Enterprise or Console access; the Free
+  plan currently does not include Claude Code.
+- MindBridge additionally needs Git, Python 3.11+, Docker and Ollama.
 - Enough local disk for Postgres images and `nomic-embed-text`.
+
+The production proof on this site was reproduced on a MacBook Pro with Apple
+M1 Pro (8-core), 16 GB RAM, macOS 26.5.2 / arm64, Claude Code 2.1.226,
+MindBridge Python 3.12.13, Docker 29.2.1 and Ollama 0.32.5. These are verified
+values, not minimum requirements.
 
 ## Install
 
@@ -38,17 +50,47 @@ a **local STDIO MCP server**. Read the entire guide before changing anything.
    docker compose up -d db redis
    ```
 
+   If Claude Code is not installed yet, use Anthropic's recommended native
+   installer, then verify it:
+
+   ```bash
+   # macOS, Linux or WSL
+   curl -fsSL https://claude.ai/install.sh | bash
+   claude --version
+   claude doctor
+   ```
+
+   On Windows PowerShell, use `irm https://claude.ai/install.ps1 | iex`.
+
 3. Register the local MCP server:
 
    ```bash
-   chmod +x scripts/run-mcp.sh scripts/install-codex-mcp.sh
-   scripts/install-codex-mcp.sh
-   codex mcp list
+   chmod +x scripts/run-mcp.sh scripts/install-codex-mcp.sh scripts/install-claude-mcp.sh
+   command -v codex >/dev/null && scripts/install-codex-mcp.sh
+   command -v claude >/dev/null && scripts/install-claude-mcp.sh
+   command -v codex >/dev/null && codex mcp list
+   command -v claude >/dev/null && claude mcp list
    ```
 
-4. Do not claim the current conversation can see a newly installed MCP server.
-   Tell the user to restart Codex or open a fresh session. In that session,
+4. Do not claim a currently open client can see a newly installed MCP server.
+   Restart Codex / Claude Code or open a fresh session. In that session,
    verify `/mcp` lists `mindbridge`.
+
+## Put Claude Code and Codex history in one store
+
+The MCP connection and transcript ingestion are separate paths that share the
+same `MemoryService` and Postgres database:
+
+```bash
+# Reads ~/.claude/projects plus active and archived ~/.codex rollouts.
+# The source directories are never modified.
+.venv/bin/python -m ingest.runner --source all
+.venv/bin/python -m ingest.runner --status
+```
+
+Claude Code rows are labelled `claude-code`; Codex rows are labelled
+`codex-cli`. Byte cursors read only appended content, while `source_key` makes a
+full replay idempotent. Tool arguments/results stay excluded by default.
 
 ## First safe test
 
@@ -63,7 +105,7 @@ to test a durable write, ask them for one non-sensitive preference and let the
 MCP approval flow confirm `upsert_preference`. Then open another session and
 query it again to demonstrate cross-session recall.
 
-## Everyday use from Codex
+## Everyday use from Codex or Claude Code
 
 MindBridge currently exposes eight tools:
 
@@ -86,7 +128,7 @@ MindBridge currently exposes eight tools:
 - `get_daily_review` returns one Markdown-ready review containing T2, both T3
   lanes and pending candidates—useful for an Obsidian daily note.
 
-Useful requests to give Codex:
+Useful requests to give either coding agent:
 
 ### Review what happened today (T2)
 

@@ -40,7 +40,8 @@ structured logs already on disk and extracts what happened that day. This only
 works for tools that write such logs:
 
 - `~/.claude/projects/**/*.jsonl` (Claude Code)
-- `~/.codex/archived_sessions/` (Codex CLI)
+- `~/.codex/sessions/**/rollout-*.jsonl` plus
+  `~/.codex/archived_sessions/rollout-*.jsonl` (active and archived Codex CLI)
 
 **Path B — active MCP read/write.** Mounted as a standard MCP server exposing
 `get_daily_review` across all review layers; separate T2/T3 reads; confirmed
@@ -179,6 +180,22 @@ Register the MCP server with Claude Desktop, Claude Code, Cursor or VS Code:
 }
 ```
 
+For the two local coding clients, the repository includes idempotent installers.
+Both launch the same STDIO server and therefore read and write the same local
+Postgres memory store:
+
+```bash
+scripts/install-codex-mcp.sh
+scripts/install-claude-mcp.sh
+codex mcp list
+claude mcp list
+```
+
+MCP is the active read/write path. Passive transcript capture is separate:
+`python -m ingest.runner --source all` reads Claude Code plus active and archived
+Codex JSONL into one T1 table, labels every row by source, then rebuilds shared
+T2 cards. Source files are read-only and `source_key` keeps re-runs idempotent.
+
 ### Use MindBridge inside Codex
 
 Codex supports local STDIO MCP servers. Point it at the repository virtualenv,
@@ -221,6 +238,19 @@ On 2026-08-19 a fresh Codex session called `temporal_query` against the local
 store and returned three real T3 records with source ids. This is a local
 integration, not a public hosted memory service; restarting Codex or opening a
 new session is required after changing MCP configuration.
+
+On 2026-08-20 Claude Code was registered at user scope and reported the same
+MindBridge STDIO server connected. A dual-source ingest then read Claude Code,
+active Codex and archived Codex logs into the same Postgres store; the database
+contained both source labels and zero duplicate `source_key` values. A fresh,
+non-persistent Claude Code session then called `get_daily_review` through the
+registered MCP server and received T2, operational T3, reflective T3 and Pattern
+Candidates as four separate sections without invoking any write tool.
+
+That validation ran on a MacBook Pro (Apple M1 Pro, 8-core, 16 GB RAM), macOS
+26.5.2 / arm64, Claude Code 2.1.226, Python 3.12.13 inside the MindBridge
+virtualenv, Docker 29.2.1 and Ollama 0.32.5. The landing page separates this
+verified device from Anthropic's official minimum requirements.
 
 Both transports call the same `MemoryService`, so `upsert_preference` over MCP
 and `POST /memories` over HTTP cannot drift apart.
