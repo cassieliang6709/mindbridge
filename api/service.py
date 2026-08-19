@@ -8,7 +8,7 @@ over MCP and `POST /memories` over HTTP cannot drift apart.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Self
 
 import asyncpg
@@ -17,6 +17,7 @@ from .cache import QueryCache
 from .db import apply_schema, create_pool
 from .embeddings import Embedder, build_embedder
 from .memory import (
+    PatternCandidateStore,
     RollingSummaryStore,
     SessionBufferStore,
     VectorMemoryStore,
@@ -24,9 +25,14 @@ from .memory import (
 )
 from .models import (
     CardScope,
+    DailyReview,
     MemoryHit,
     MemoryNamespace,
     MemoryWithDecay,
+    PatternCandidate,
+    PatternCandidateCreate,
+    PatternDecisionRequest,
+    PatternStatus,
     SessionBuffer,
     SummaryCard,
     SummaryCardCreate,
@@ -63,6 +69,7 @@ class MemoryService:
         self._pool = pool
         self.turns = SessionBufferStore(pool, settings.session_buffer_window)
         self.summaries = RollingSummaryStore(pool)
+        self.patterns = PatternCandidateStore(pool)
         self.vectors = VectorMemoryStore(
             pool,
             decay_rate_per_day=settings.decay_rate_per_day,
@@ -211,6 +218,94 @@ class MemoryService:
             limit=limit,
             include_superseded=include_superseded,
             namespaces=namespaces,
+        )
+
+    # --- reflective candidates ------------------------------------------
+
+    async def propose_pattern(
+        self, draft: PatternCandidateCreate
+    ) -> PatternCandidate:
+        """Keep a repeated-behaviour inference outside T3 until confirmation."""
+        return await self.patterns.create(draft)
+
+    async def list_patterns(
+        self,
+        *,
+        status: PatternStatus | None = "pending",
+        limit: int = 20,
+    ) -> list[PatternCandidate]:
+        return await self.patterns.list(status=status, limit=limit)
+
+    async def resolve_pattern(
+        self,
+        candidate_id: int,
+        request: PatternDecisionRequest,
+    ) -> PatternCandidate:
+        """Confirm/edit into reflective T3, or reject without writing memory."""
+        candidate = await self.patterns.get(candidate_id)
+        if candidate is None or candidate.status != "pending":
+            raise KeyError(f"pattern candidate {candidate_id} not found or resolved")
+
+        if request.decision == "reject":
+            return await self.patterns.resolve(
+                candidate_id,
+                status="rejected",
+                description=candidate.description,
+                resolution_note=request.resolution_note,
+                confirmed_memory_id=None,
+            )
+
+        content = (request.confirmed_content or candidate.description).strip()
+        outcome = await self.upsert_preference(
+            UpsertPreferenceRequest(
+                content=content,
+                namespace="reflective",
+                category="confirmed_pattern",
+                confirmed_by_user=True,
+            )
+        )
+        return await self.patterns.resolve(
+            candidate_id,
+            status="edited" if request.decision == "edit" else "confirmed",
+            description=content,
+            resolution_note=request.resolution_note,
+            confirmed_memory_id=outcome.record.id,
+        )
+
+    async def daily_review(self, period: str = "latest") -> DailyReview:
+        """Join one T2 card, today's T3 writes and pending reflective candidates."""
+        if period.strip().lower() == "latest":
+            cards = await self.list_summaries(limit=1, scope="day")
+            card = cards[0] if cards else None
+            review_period = card.period if card is not None else date.today().isoformat()
+        else:
+            review_period = period.strip()
+            card = await self.get_summary(review_period)
+
+        operational = await self.list_memories(
+            limit=200,
+            include_superseded=False,
+            namespaces=["operational"],
+        )
+        reflective = await self.list_memories(
+            limit=200,
+            include_superseded=False,
+            namespaces=["reflective"],
+        )
+        return DailyReview(
+            period=review_period,
+            card=card,
+            operational_memories=[
+                memory
+                for memory in operational
+                if memory.created_at.date().isoformat() == review_period
+            ],
+            reflective_memories=[
+                memory
+                for memory in reflective
+                if memory.created_at.date().isoformat() == review_period
+            ],
+            pending_patterns=await self.list_patterns(status="pending", limit=20),
         )
 
     async def list_turns_between(

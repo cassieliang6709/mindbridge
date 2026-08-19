@@ -12,8 +12,13 @@ from pydantic import BaseModel
 
 from .models import (
     CardScope,
+    DailyReview,
     MemoryWithDecay,
     MemoryNamespace,
+    PatternCandidate,
+    PatternCandidateCreate,
+    PatternDecisionRequest,
+    PatternStatus,
     SessionBuffer,
     SummaryCard,
     SummaryCardCreate,
@@ -172,3 +177,40 @@ async def temporal_query(
 ) -> TemporalQueryResult:
     """Same code path as the MCP `temporal_query` tool."""
     return await service.temporal_query(request)
+
+
+@app.post("/patterns", tags=["Reflective patterns"])
+async def propose_pattern(
+    request: PatternCandidateCreate, service: ServiceDep
+) -> PatternCandidate:
+    """Create a reviewable inference outside T3."""
+    return await service.propose_pattern(request)
+
+
+@app.get("/patterns", tags=["Reflective patterns"])
+async def list_patterns(
+    service: ServiceDep,
+    pattern_status: Annotated[PatternStatus | None, Query(alias="status")] = "pending",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[PatternCandidate]:
+    return await service.list_patterns(status=pattern_status, limit=limit)
+
+
+@app.post("/patterns/{candidate_id}/resolve", tags=["Reflective patterns"])
+async def resolve_pattern(
+    candidate_id: Annotated[int, Path(ge=1)],
+    request: PatternDecisionRequest,
+    service: ServiceDep,
+) -> PatternCandidate:
+    try:
+        return await service.resolve_pattern(candidate_id, request)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@app.get("/daily-review", tags=["Companion review"])
+async def daily_review(
+    service: ServiceDep,
+    period: Annotated[str, Query()] = "latest",
+) -> DailyReview:
+    return await service.daily_review(period)

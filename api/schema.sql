@@ -82,6 +82,21 @@ CREATE TABLE IF NOT EXISTS memory_vectors (
 ALTER TABLE memory_vectors
     ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'operational';
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'memory_vectors'::regclass
+          AND conname = 'memory_vectors_namespace_check'
+    ) THEN
+        ALTER TABLE memory_vectors
+            ADD CONSTRAINT memory_vectors_namespace_check
+            CHECK (namespace IN ('operational', 'reflective'));
+    END IF;
+END
+$$;
+
 CREATE INDEX IF NOT EXISTS memory_vectors_namespace_open_idx
     ON memory_vectors (namespace, category, created_at DESC)
     WHERE valid_at IS NULL;
@@ -91,6 +106,27 @@ CREATE INDEX IF NOT EXISTS memory_vectors_namespace_open_idx
 CREATE INDEX IF NOT EXISTS memory_vectors_embedding_idx
     ON memory_vectors USING ivfflat (embedding vector_cosine_ops)
     WITH (lists = 100);
+
+-- Pattern candidates are inferences, not memories. They live outside T3 until
+-- the user confirms or edits the wording; only then does the service create a
+-- reflective T3 row and retain this candidate as its receipt.
+CREATE TABLE IF NOT EXISTS pattern_candidates (
+    id                    BIGSERIAL PRIMARY KEY,
+    description           TEXT        NOT NULL,
+    supporting_evidence   JSONB       NOT NULL,
+    counter_evidence      JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    contexts              JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    confidence            REAL        NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+    status                TEXT        NOT NULL DEFAULT 'pending'
+                                      CHECK (status IN ('pending', 'confirmed', 'edited', 'rejected')),
+    resolution_note       TEXT,
+    confirmed_memory_id   BIGINT      REFERENCES memory_vectors (id) ON DELETE SET NULL,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS pattern_candidates_status_created_idx
+    ON pattern_candidates (status, created_at DESC);
 
 -- --- Path A ingestion cursors -------------------------------------------
 -- One row per transcript file. bytes_read is a resume point: these logs are

@@ -65,7 +65,7 @@ query it again to demonstrate cross-session recall.
 
 ## Everyday use from Codex
 
-MindBridge currently exposes four tools:
+MindBridge currently exposes eight tools:
 
 - `get_daily_card` reads one T2 day card: what happened, observed facts and
   open threads. It does not change T3.
@@ -77,6 +77,14 @@ MindBridge currently exposes four tools:
 - `upsert_preference` stores durable operational memory by default. Reflective
   patterns, values and identity hypotheses are rejected unless the user has
   confirmed the wording and the call sets `confirmed_by_user=true`.
+- `propose_pattern` creates a reviewable candidate only after at least three
+  observations across two dates. It does not write T3.
+- `review_pattern_candidates` shows supporting evidence, counter-evidence and
+  current status.
+- `resolve_pattern` records confirm/edit/reject. Confirm/edit writes reflective
+  T3; reject keeps only the receipt.
+- `get_daily_review` returns one Markdown-ready review containing T2, both T3
+  lanes and pending candidates—useful for an Obsidian daily note.
 
 Useful requests to give Codex:
 
@@ -84,6 +92,18 @@ Useful requests to give Codex:
 
 > Call `get_daily_card` for the latest T2 card. Cite the card id and summarize
 > completed work, observed facts and open threads. Do not infer a personality.
+
+### Generate an Obsidian-ready daily review
+
+> Call `get_daily_review` for the latest day. Keep the four sections separate:
+> T2, operational T3, reflective T3 and pending Pattern Candidates. Return
+> Markdown that I can save as today's Obsidian note.
+
+### Review a possible recurring pattern
+
+> List pending Pattern Candidates. Show all supporting evidence and
+> counter-evidence before asking whether I confirm, edit or reject one. Do not
+> call `resolve_pattern` until I answer explicitly.
 
 ### Audit what lasts across sessions (T3)
 

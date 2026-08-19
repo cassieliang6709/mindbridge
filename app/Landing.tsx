@@ -202,7 +202,7 @@ const copy = {
         也记得你已经 <em>改变</em>。
       </>
     ),
-    lede: "MindBridge 为 Codex 等 AI 工具提供一层可追溯的长期记忆。每次召回都带着来源和时间；偏好改变时，旧记录不会继续冒充现在的你。Memory Core 默认在本地运行。",
+    lede: "MindBridge 为 Codex 等 AI 工具提供一层可追溯的长期记忆：operational T3 记住怎样更好地和你工作，reflective T3 只保存你确认过的模式与身份假设。每次召回都带来源和时间，Memory Core 默认在本地运行。",
     learn: "在 Codex 中使用",
     proofEyebrow: "先看见产品，再理解架构",
     proofTitle: "一张卡片记录今天；一条时间轴解释变化。",
@@ -255,14 +255,14 @@ const copy = {
       built: true,
       name: "主动 MCP 读写",
       note: "挂成标准 MCP server，模型在对话里自己决定何时写入、何时召回。",
-      sources: ["get_daily_card", "review_long_term_memory", "temporal_query", "upsert_preference"],
+      sources: ["get_daily_card", "get_daily_review", "review_long_term_memory", "temporal_query", "upsert_preference", "propose_pattern", "review_pattern_candidates", "resolve_pattern"],
     },
     laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge 记忆层",
     storeTiers: [
       ["T1", "会话缓冲区 — 今天的原始轮次"],
       ["T2", "滚动摘要 — 按天归档的记忆卡"],
-      ["T3", "pgvector — 带时间衰减的长期偏好"],
+      ["T3", "operational 工作偏好 + 用户确认的 reflective 模式"],
     ] as [string, string][],
     outputs: [
       ["每日记忆卡", "不用主动写，翻回上个月也能看见自己的变化。", Book],
@@ -290,20 +290,20 @@ const copy = {
     codexCopied: "已复制，粘贴进 Codex",
     codexGuide: "查看完整安装与使用指南",
     codexBoundary: "本机验证，不是公网托管服务；需要本地数据层运行。公开 Companion Loop 使用合成数据。",
-    usageEyebrow: "在 Codex 里的四步用法",
-    usageTitle: "先看今天，再决定什么值得长期记住。",
+    usageEyebrow: "在 Codex 里的五步用法",
+    usageTitle: "先看今天，再区分工作偏好与关于自己的假设。",
     usageNote:
-      "T2 回答“我今天做了什么”，T3 回答“AI 以后应该怎样理解我”。两个只读入口分开显示；只有最后一步会请求写入确认。",
+      "Daily Review 同时显示 T2、operational T3、reflective T3 与待确认 Pattern Candidate。推断必须先留在候选层；只有用户确认后才能进入 reflective T3。",
     usageItems: [
       [
         "01 · 回顾今天（T2）",
         "读取按天生成的事实、行为观察与未完成事项，不把它们自动当成长期性格。",
-        "调用 get_daily_card 读取最新 T2 日卡，标注 card id，并总结完成事项和 open threads。",
+        "调用 get_daily_review 读取最新日报，分开显示 T2、两条 T3 和待确认候选。",
       ],
       [
         "02 · 审计长期记忆（T3）",
         "完整查看当前和已失效的长期记忆，而不是只看语义搜索命中的几条。",
-        "调用 review_long_term_memory 读取最新 10 条 T3，区分 current 与 superseded，并标注 ids。",
+        "分别用 namespace=operational 和 namespace=reflective 调用 review_long_term_memory，标注 ids。",
       ],
       [
         "03 · 带着记忆工作",
@@ -311,9 +311,14 @@ const copy = {
         "先用 temporal_query 查询我的写作偏好，引用 memory ids，然后再修改这篇文章。",
       ],
       [
-        "04 · 确认后再记住",
-        "一次性指令留在当前任务；只有未来仍有用的稳定偏好才进入 T3。",
-        "调用 upsert_preference 记住：技术解释默认先给直观例子。写入前先让我确认。",
+        "04 · 先提出 Pattern Candidate",
+        "至少三条证据、跨两个日期，同时展示反例；候选不是人格事实。",
+        "调用 propose_pattern 提出一个关于我如何处理范围不确定性的候选，但不要写入 T3。",
+      ],
+      [
+        "05 · 用户确认后再进入 Reflective T3",
+        "确认、改写或拒绝都会留下 receipt；只有确认/改写会创建长期记忆。",
+        "先让我查看候选；得到明确决定后再调用 resolve_pattern。",
       ],
     ] as [string, string, string][],
     trustEyebrow: "信任边界",
@@ -456,7 +461,7 @@ const copy = {
     errServer: "提交通道还没接上。",
     modes: [
       ["自动生成", "连上本地 agent，不用你主动写。", Sparkle],
-      ["MCP 原生", "两个 tool，任意客户端接入。", PlugsConnected],
+      ["MCP 原生", "八个工具，任意 MCP 客户端接入。", PlugsConnected],
       ["本地优先", "对话与数据库都留在你机器上。", ShieldCheck],
     ] as [string, string, typeof Sparkle][],
     footer: ["源码", "日记界面", "联系"],
@@ -477,7 +482,7 @@ const copy = {
         that knows you <em>changed</em>.
       </>
     ),
-    lede: "MindBridge gives Codex and other AI tools a traceable long-term memory. Every recall carries its source and date. When a preference changes, an old record no longer pretends to be the current you. The Memory Core runs locally by default.",
+    lede: "MindBridge gives Codex and other AI tools a traceable long-term memory: operational T3 remembers how to work with you, while reflective T3 stores only patterns and identity hypotheses you confirmed. Every recall carries its source and date. The Memory Core runs locally by default.",
     learn: "Use it with Codex",
     proofEyebrow: "See the product before the architecture",
     proofTitle: "One card captures today. One timeline explains change.",
@@ -528,14 +533,14 @@ const copy = {
       built: true,
       name: "Active MCP read/write",
       note: "Mounted as a standard MCP server, so the model decides mid-conversation when to write and when to recall.",
-      sources: ["get_daily_card", "review_long_term_memory", "temporal_query", "upsert_preference"],
+      sources: ["get_daily_card", "get_daily_review", "review_long_term_memory", "temporal_query", "upsert_preference", "propose_pattern", "review_pattern_candidates", "resolve_pattern"],
     },
     laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge memory layer",
     storeTiers: [
       ["T1", "Session buffer — today's raw turns"],
       ["T2", "Rolling summary — one card per day"],
-      ["T3", "pgvector — long-term, time-decayed"],
+      ["T3", "operational preferences + user-confirmed reflective patterns"],
     ] as [string, string][],
     outputs: [
       ["Daily memory card", "Written for you, and readable a month later.", Book],
@@ -567,20 +572,20 @@ const copy = {
     codexCopied: "Copied — paste it into Codex",
     codexGuide: "Open the full install and usage guide",
     codexBoundary: "Verified locally, not a public hosted memory service; the local data layer must be running. The public Companion Loop uses synthetic data.",
-    usageEyebrow: "FOUR STEPS INSIDE CODEX",
-    usageTitle: "Review today before deciding what should last.",
+    usageEyebrow: "FIVE STEPS INSIDE CODEX",
+    usageTitle: "Review today, then separate work preferences from hypotheses about yourself.",
     usageNote:
-      "T2 answers “what did I do today?” T3 answers “how should AI understand me later?” The read paths stay separate; only the final step asks for write approval.",
+      "Daily Review separates T2, operational T3, reflective T3, and pending Pattern Candidates. An inference stays outside memory until the user confirms its wording.",
     usageItems: [
       [
         "01 · Review today (T2)",
         "Read facts, observed work and open threads from a day card without turning them into durable traits.",
-        "Call get_daily_card for the latest T2 card. Cite the card id and summarize completed work and open threads.",
+        "Call get_daily_review and show T2, both T3 lanes, and pending candidates separately.",
       ],
       [
         "02 · Audit memory (T3)",
         "List current and superseded long-term records instead of seeing only semantic search hits.",
-        "Call review_long_term_memory for the newest ten T3 records. Separate current from superseded and cite every id.",
+        "Call review_long_term_memory twice, once per namespace, and cite every id.",
       ],
       [
         "03 · Work with context",
@@ -588,9 +593,14 @@ const copy = {
         "Use temporal_query for my writing preferences, cite the memory ids, then edit this essay.",
       ],
       [
-        "04 · Confirm before saving",
-        "Keep one-off instructions in the task; write only stable preferences that should matter again.",
-        "Use upsert_preference to remember: start technical explanations with a concrete example. Ask me before writing.",
+        "04 · Propose a Pattern Candidate",
+        "Require three observations across two dates and show counter-evidence. A candidate is not a trait.",
+        "Use propose_pattern for a hypothesis about how I respond to unclear scope, but do not write T3.",
+      ],
+      [
+        "05 · Confirm before Reflective T3",
+        "Confirm, edit, or reject with a receipt; only confirm/edit creates durable memory.",
+        "Show me the candidate first. Call resolve_pattern only after my explicit decision.",
       ],
     ] as [string, string, string][],
     trustEyebrow: "Trust boundaries",
@@ -740,7 +750,7 @@ const copy = {
     errServer: "The signup channel is not wired up yet.",
     modes: [
       ["Written for you", "Connect a local agent; stop journalling by hand.", Sparkle],
-      ["MCP native", "Two tools, any client.", PlugsConnected],
+      ["MCP native", "Eight tools, any MCP client.", PlugsConnected],
       ["Local first", "Transcripts and database stay on your machine.", ShieldCheck],
     ] as [string, string, typeof Sparkle][],
     footer: ["Source", "Diary", "Contact"],
@@ -938,7 +948,7 @@ export function Landing({ locale }: { locale: Locale }) {
         </div>
         <div className="usage-grid">
           {t.usageItems.map(([title, note, prompt], index) => {
-            const Icon = [Book, Sparkle, Path, ShieldCheck][index];
+            const Icon = [Book, Path, PlugsConnected, Sparkle, ShieldCheck][index];
             return (
               <article className="usage-card" key={title}>
                 <span className="usage-icon"><Icon weight="fill" /></span>

@@ -1,10 +1,17 @@
 """Safety boundary between operational and reflective T3 memory."""
 
 import unittest
+from datetime import date
 
 from pydantic import ValidationError
 
-from api.models import TemporalQueryRequest, UpsertPreferenceRequest
+from api.models import (
+    PatternCandidateCreate,
+    PatternDecisionRequest,
+    PatternEvidence,
+    TemporalQueryRequest,
+    UpsertPreferenceRequest,
+)
 
 
 class T3NamespaceTests(unittest.TestCase):
@@ -55,6 +62,28 @@ class T3NamespaceTests(unittest.TestCase):
             namespaces=["reflective"],
         )
         self.assertEqual(request.namespaces, ["reflective"])
+
+    def test_pattern_candidate_needs_three_observations_across_two_dates(self) -> None:
+        one = PatternEvidence(source_date=date(2026, 8, 18), summary="First event")
+        with self.assertRaisesRegex(ValidationError, "at least 3"):
+            PatternCandidateCreate(
+                description="I may broaden scope when a project feels uncertain",
+                supporting_evidence=[one],
+                contexts=["personal projects"],
+                confidence=0.6,
+            )
+
+        with self.assertRaisesRegex(ValidationError, "at least two dates"):
+            PatternCandidateCreate(
+                description="I may broaden scope when a project feels uncertain",
+                supporting_evidence=[one, one, one],
+                contexts=["personal projects"],
+                confidence=0.6,
+            )
+
+    def test_edit_decision_needs_user_wording(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "confirmed_content"):
+            PatternDecisionRequest(decision="edit")
 
 
 if __name__ == "__main__":

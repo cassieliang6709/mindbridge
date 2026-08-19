@@ -45,6 +45,10 @@ from api.models import (
     MemoryCategory,
     MemoryNamespace,
     MemoryWithDecay,
+    PatternCandidate,
+    PatternCandidateCreate,
+    PatternDecisionRequest,
+    PatternEvidence,
     SummaryCard,
     TemporalQueryRequest,
     UpsertPreferenceRequest,
@@ -95,7 +99,10 @@ mcp = FastMCP(
         "preferences, habits or past decisions. Call upsert_preference only for "
         "a durable preference, not a one-off task instruction. Reflective memory "
         "must remain a candidate until the user confirms its wording. Show "
-        "supporting evidence and counterevidence, and never present an identity "
+        "supporting evidence and counterevidence, and use propose_pattern only "
+        "after finding at least three observations across two dates. Use "
+        "resolve_pattern only after the user explicitly confirms, edits or "
+        "rejects the wording. Never present an identity "
         "hypothesis as diagnosis or fact. Cite bracketed ids when relying on memory."
     ),
 )
@@ -139,6 +146,34 @@ def _format_memory(record: MemoryWithDecay) -> str:
         f"· learned={record.created_at.date().isoformat()} "
         f"· status={status}{replacement}"
     )
+
+
+def _format_pattern(candidate: PatternCandidate) -> str:
+    lines = [
+        f"Pattern Candidate [{candidate.id}] · status={candidate.status}",
+        f"hypothesis={candidate.description}",
+        f"confidence={candidate.confidence:.2f}",
+        f"contexts={', '.join(candidate.contexts)}",
+        "supporting evidence:",
+    ]
+    lines.extend(
+        f"- {item.source_date.isoformat()} · {item.summary}"
+        f"{f' · source=[{item.source_id}]' if item.source_id else ''}"
+        for item in candidate.supporting_evidence
+    )
+    lines.append("counter-evidence:")
+    if candidate.counter_evidence:
+        lines.extend(
+            f"- {item.source_date.isoformat()} · {item.summary}"
+            f"{f' · source=[{item.source_id}]' if item.source_id else ''}"
+            for item in candidate.counter_evidence
+        )
+    else:
+        lines.append("- none recorded; absence is not proof")
+    lines.append(
+        "Boundary: this is an inference awaiting the user's wording, not a trait or diagnosis."
+    )
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -194,6 +229,106 @@ async def review_long_term_memory(
         f"superseded={'included' if include_superseded else 'excluded'}"
     )
     return "\n\n".join([header, *(_format_memory(record) for record in records)])
+
+
+@mcp.tool()
+async def propose_pattern(
+    description: str,
+    supporting_evidence: list[PatternEvidence],
+    contexts: list[str],
+    confidence: float,
+    counter_evidence: list[PatternEvidence] | None = None,
+) -> str:
+    """Create a Pattern Candidate outside T3 for the user to review.
+
+    Requires at least three concrete observations across at least two dates.
+    Repetition alone is not confirmation: include counter-evidence when it
+    exists, and do not use diagnostic or negative personality labels.
+    """
+    service = await _get_service()
+    candidate = await service.propose_pattern(
+        PatternCandidateCreate(
+            description=description,
+            supporting_evidence=supporting_evidence,
+            counter_evidence=counter_evidence or [],
+            contexts=contexts,
+            confidence=confidence,
+        )
+    )
+    return _format_pattern(candidate)
+
+
+@mcp.tool()
+async def review_pattern_candidates(
+    status: Literal["pending", "confirmed", "edited", "rejected", "all"] = "pending",
+    limit: int = 20,
+) -> str:
+    """List reflective hypotheses and their evidence without changing T3."""
+    service = await _get_service()
+    safe_limit = max(1, min(limit, 100))
+    records = await service.list_patterns(
+        status=None if status == "all" else status,
+        limit=safe_limit,
+    )
+    if not records:
+        return f"No pattern candidates found for status={status}."
+    return "\n\n".join(_format_pattern(record) for record in records)
+
+
+@mcp.tool()
+async def resolve_pattern(
+    candidate_id: int,
+    decision: Literal["confirm", "edit", "reject"],
+    confirmed_content: str | None = None,
+    resolution_note: str | None = None,
+) -> str:
+    """Apply the user's explicit decision to one Pattern Candidate.
+
+    Confirm/edit creates a user-confirmed reflective T3 memory; reject keeps the
+    receipt but writes no memory. Never call this from model inference alone.
+    """
+    service = await _get_service()
+    candidate = await service.resolve_pattern(
+        candidate_id,
+        PatternDecisionRequest(
+            decision=decision,
+            confirmed_content=confirmed_content,
+            resolution_note=resolution_note,
+        ),
+    )
+    memory = (
+        f"reflective_memory=[{candidate.confirmed_memory_id}]"
+        if candidate.confirmed_memory_id is not None
+        else "reflective_memory=none"
+    )
+    return f"pattern=[{candidate.id}] · status={candidate.status} · {memory}"
+
+
+@mcp.tool()
+async def get_daily_review(period: str = "latest") -> str:
+    """Review one day across T2, both T3 lanes and pending Pattern Candidates."""
+    service = await _get_service()
+    review = await service.daily_review(period)
+    lines = [f"# MindBridge Daily Review · {review.period}"]
+    if review.card is None:
+        lines.extend(["", "## T2 · What happened", "No day card found."])
+    else:
+        lines.extend(["", "## T2 · What happened", _format_daily_card(review.card)])
+    lines.extend(["", "## Operational T3 · How AI should work with you"])
+    lines.extend(
+        _format_memory(memory) for memory in review.operational_memories
+    )
+    if not review.operational_memories:
+        lines.append("No new operational memory for this day.")
+    lines.extend(["", "## Reflective T3 · What you confirmed about yourself"])
+    lines.extend(_format_memory(memory) for memory in review.reflective_memories)
+    if not review.reflective_memories:
+        lines.append("No new reflective memory for this day.")
+    lines.extend(["", "## Pattern Candidates · Waiting for you"])
+    lines.extend(_format_pattern(candidate) for candidate in review.pending_patterns)
+    if not review.pending_patterns:
+        lines.append("No pending pattern candidates.")
+    return "\n\n".join(lines)
 
 
 @mcp.tool()

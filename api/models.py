@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -39,6 +39,8 @@ UpsertAction = Literal["inserted", "refreshed", "superseded"]
 
 # Day cards and session cards share one table, so every read says which it wants.
 CardScope = Literal["day", "session", "all"]
+PatternStatus = Literal["pending", "confirmed", "edited", "rejected"]
+PatternDecision = Literal["confirm", "edit", "reject"]
 
 
 class Turn(BaseModel):
@@ -228,3 +230,72 @@ class TemporalQueryResult(BaseModel):
     context_block: str = Field(
         description="Pre-formatted text ready to paste into a prompt."
     )
+
+
+class PatternEvidence(BaseModel):
+    """One dated, inspectable observation supporting or challenging a pattern."""
+
+    source_date: date
+    summary: str = Field(min_length=4, max_length=400)
+    source_id: str | None = Field(
+        default=None,
+        description="Optional T1/T2 id or other stable receipt reference.",
+    )
+
+
+class PatternCandidateCreate(BaseModel):
+    """An inference waiting for the user, never a durable trait by itself."""
+
+    description: str = Field(min_length=10, max_length=500)
+    supporting_evidence: list[PatternEvidence] = Field(min_length=3, max_length=10)
+    counter_evidence: list[PatternEvidence] = Field(default_factory=list, max_length=10)
+    contexts: list[str] = Field(min_length=1, max_length=8)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def require_repeated_dates(self) -> "PatternCandidateCreate":
+        dates = {item.source_date for item in self.supporting_evidence}
+        if len(dates) < 2:
+            raise ValueError("a pattern candidate needs evidence from at least two dates")
+        self.contexts = [context.strip() for context in self.contexts if context.strip()]
+        if not self.contexts:
+            raise ValueError("a pattern candidate needs at least one context")
+        return self
+
+
+class PatternCandidate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    description: str
+    supporting_evidence: list[PatternEvidence]
+    counter_evidence: list[PatternEvidence]
+    contexts: list[str]
+    confidence: float
+    status: PatternStatus
+    resolution_note: str | None = None
+    confirmed_memory_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PatternDecisionRequest(BaseModel):
+    decision: PatternDecision
+    confirmed_content: str | None = Field(default=None, min_length=10, max_length=500)
+    resolution_note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_edited_wording(self) -> "PatternDecisionRequest":
+        if self.decision == "edit" and not self.confirmed_content:
+            raise ValueError("edit requires confirmed_content")
+        return self
+
+
+class DailyReview(BaseModel):
+    """One review surface joining T2, both T3 lanes and pending inference."""
+
+    period: str
+    card: SummaryCard | None
+    operational_memories: list[MemoryWithDecay]
+    reflective_memories: list[MemoryWithDecay]
+    pending_patterns: list[PatternCandidate]

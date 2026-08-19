@@ -43,8 +43,8 @@ works for tools that write such logs:
 - `~/.codex/archived_sessions/` (Codex CLI)
 
 **Path B — active MCP read/write.** Mounted as a standard MCP server exposing
-`get_daily_card` for T2, `review_long_term_memory` and `temporal_query` for T3,
-and `upsert_preference` for confirmed durable writes. Works with any MCP client
+`get_daily_review` across all review layers; separate T2/T3 reads; confirmed
+durable writes; and a Pattern Candidate review loop. Works with any MCP client
 — Codex, Claude Desktop, Claude Code, Cursor and VS Code.
 
 ChatGPT and web Claude expose no history API; they need a manual export and are
@@ -89,6 +89,8 @@ one Mac; it labels that state instead of presenting the sample as live.
 | Diary (`/demo`) — daily card, memory timeline, raw T1/T2/T3 disclosure | done |
 | `api/` — FastAPI, three tiers, decay retrieval, dedup, query cache | done (M1) |
 | `mcp_server/` — separate T2/T3 review, T3 recall and confirmed writes over stdio | done (M3) |
+| Pattern Candidate → confirm/edit/reject → reflective T3 receipt | done locally |
+| `get_daily_review` — T2 + both T3 lanes + pending candidates | done locally |
 | `evals/eval_memory_engine.py` — decay, dedup and token benchmarks | done |
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `/demo` wired to the API, with an offline fallback | done |
@@ -231,6 +233,9 @@ and `POST /memories` over HTTP cannot drift apart.
 | `GET /memories?namespace=` | T3 | newest-first listing, optionally one namespace |
 | `GET /turns?start=&end=` | T1 | raw turns in a range; the caller owns the timezone |
 | `POST /memories/query` | T3 | time-decayed top-K recall, optionally one namespace |
+| `POST /patterns` · `GET /patterns` | Reflection | create/review candidates outside T3 |
+| `POST /patterns/{id}/resolve` | Reflection | confirm/edit into reflective T3, or reject |
+| `GET /daily-review` | Companion | one review surface across T2, T3 and candidates |
 
 Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files
 had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,
