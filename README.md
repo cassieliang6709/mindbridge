@@ -57,11 +57,20 @@ implying full coverage.
 | --- | --- | --- |
 | T1 | The day's raw turns | session buffer, in process |
 | T2 | One structured card per day | rolling summary |
-| T3 | Long-term preferences, time-decayed | Postgres + pgvector |
+| T3 | Long-term operational + reflective memory, time-decayed | Postgres + pgvector |
 
 Every T3 record carries `created_at` and `valid_at`, so a superseded preference
 decays out of recall instead of being silently overwritten. Writes run a
 cosine-similarity check first, so one preference stays one row.
+
+T3 has two explicit namespaces. **Operational** memory tells an agent how to
+work with the user (`coding_style`, `tool_preference`, `behavioral_fact`,
+`schedule`, `other`). **Reflective** memory holds wording the user has reviewed
+about recurring patterns, values, triggers, helpful strategies or an identity
+hypothesis. Reflective writes fail validation unless `confirmed_by_user=true`;
+automatic transcript extraction continues to write operational memory only.
+An MBTI-like label can therefore be generated as a dated, sourced hypothesis,
+not silently stored as a fact about the person.
 
 T1 also stores the project, git branch and tool names of each turn. That is what
 lets a day card be rebuilt over the whole day from Postgres: building it from
@@ -218,10 +227,10 @@ and `POST /memories` over HTTP cannot drift apart.
 | --- | --- | --- |
 | `POST /sessions/{id}/turns` · `GET /sessions/{id}/buffer` | T1 | append and read the raw window |
 | `POST /summaries` · `GET /summaries` | T2 | write and list period cards |
-| `POST /memories` | T3 | dedup-then-write a preference |
-| `GET /memories` | T3 | newest-first listing with decay weight (no cosine, no access bump) |
+| `POST /memories` | T3 | dedup-then-write operational or confirmed reflective memory |
+| `GET /memories?namespace=` | T3 | newest-first listing, optionally one namespace |
 | `GET /turns?start=&end=` | T1 | raw turns in a range; the caller owns the timezone |
-| `POST /memories/query` | T3 | time-decayed top-K recall |
+| `POST /memories/query` | T3 | time-decayed top-K recall, optionally one namespace |
 
 Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files
 had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,

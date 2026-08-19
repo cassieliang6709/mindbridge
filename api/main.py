@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from .models import (
     CardScope,
     MemoryWithDecay,
+    MemoryNamespace,
     SessionBuffer,
     SummaryCard,
     SummaryCardCreate,
@@ -137,6 +138,7 @@ async def list_memories(
     service: ServiceDep,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     include_superseded: Annotated[bool, Query()] = True,
+    namespace: Annotated[MemoryNamespace | None, Query()] = None,
 ) -> list[MemoryWithDecay]:
     """Newest-first listing for the diary timeline.
 
@@ -144,7 +146,8 @@ async def list_memories(
     carries only its decay weight. This does not bump access_count — drawing a
     timeline is not the model recalling something.
     """
-    return await service.list_memories(limit, include_superseded)
+    namespaces = [namespace] if namespace is not None else None
+    return await service.list_memories(limit, include_superseded, namespaces)
 
 
 @app.get("/turns", tags=["T1 session buffer"])

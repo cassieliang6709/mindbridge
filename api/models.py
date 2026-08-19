@@ -5,15 +5,35 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+MemoryNamespace = Literal["operational", "reflective"]
 
 MemoryCategory = Literal[
     "coding_style",
     "tool_preference",
     "behavioral_fact",
     "schedule",
+    "confirmed_pattern",
+    "value",
+    "recurring_trigger",
+    "helpful_strategy",
+    "identity_hypothesis",
     "other",
 ]
+
+OPERATIONAL_CATEGORIES = frozenset(
+    {"coding_style", "tool_preference", "behavioral_fact", "schedule", "other"}
+)
+REFLECTIVE_CATEGORIES = frozenset(
+    {
+        "confirmed_pattern",
+        "value",
+        "recurring_trigger",
+        "helpful_strategy",
+        "identity_hypothesis",
+    }
+)
 
 UpsertAction = Literal["inserted", "refreshed", "superseded"]
 
@@ -108,6 +128,7 @@ class MemoryRecord(BaseModel):
 
     id: int
     content: str
+    namespace: MemoryNamespace = "operational"
     category: MemoryCategory
     created_at: datetime
     valid_at: datetime | None = Field(
@@ -148,7 +169,15 @@ class MemoryHit(MemoryRecord):
 
 class UpsertPreferenceRequest(BaseModel):
     content: str = Field(min_length=1)
+    namespace: MemoryNamespace = "operational"
     category: MemoryCategory = "other"
+    confirmed_by_user: bool = Field(
+        default=False,
+        description=(
+            "Required for reflective memory. It means the user confirmed the "
+            "wording, not merely that a model inferred it."
+        ),
+    )
     decay_factor: float = Field(default=1.0, gt=0.0)
     supersedes_conflicting: bool = Field(
         default=False,
@@ -157,6 +186,17 @@ class UpsertPreferenceRequest(BaseModel):
             "conflict_threshold is closed out and replaced by this record."
         ),
     )
+
+    @model_validator(mode="after")
+    def validate_namespace_boundary(self) -> "UpsertPreferenceRequest":
+        if self.namespace == "reflective":
+            if self.category not in REFLECTIVE_CATEGORIES:
+                raise ValueError("reflective memory needs a reflective category")
+            if not self.confirmed_by_user:
+                raise ValueError("reflective memory requires explicit user confirmation")
+        elif self.category not in OPERATIONAL_CATEGORIES:
+            raise ValueError("operational memory needs an operational category")
+        return self
 
 
 class UpsertPreferenceResult(BaseModel):
@@ -176,6 +216,7 @@ class TemporalQueryRequest(BaseModel):
         description="Only consider records created within this many days.",
     )
     categories: list[MemoryCategory] | None = None
+    namespaces: list[MemoryNamespace] | None = None
     include_superseded: bool = False
 
 

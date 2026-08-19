@@ -43,6 +43,7 @@ from mcp.server.fastmcp import FastMCP
 
 from api.models import (
     MemoryCategory,
+    MemoryNamespace,
     MemoryWithDecay,
     SummaryCard,
     TemporalQueryRequest,
@@ -86,14 +87,16 @@ mcp = FastMCP(
     "mindbridge",
     instructions=(
         "Temporal memory for this user. T2 day cards describe what happened; "
-        "T3 records are durable preferences and confirmed facts. Call "
+        "T3 has operational memory (how to work with the user) and reflective "
+        "memory (user-confirmed patterns, values and identity hypotheses). Call "
         "get_daily_card when the user asks what they did on a day, and "
         "review_long_term_memory when they ask what is remembered about them. "
         "Call temporal_query before answering anything that depends on their "
         "preferences, habits or past decisions. Call upsert_preference only for "
-        "a durable preference, not a one-off task instruction. Treat repeated "
-        "behaviour as a hypothesis, show supporting evidence and counterevidence, "
-        "and ask before turning it into T3. Cite bracketed ids when relying on memory."
+        "a durable preference, not a one-off task instruction. Reflective memory "
+        "must remain a candidate until the user confirms its wording. Show "
+        "supporting evidence and counterevidence, and never present an identity "
+        "hypothesis as diagnosis or fact. Cite bracketed ids when relying on memory."
     ),
 )
 
@@ -132,7 +135,8 @@ def _format_memory(record: MemoryWithDecay) -> str:
     )
     return (
         f"[{record.id}] {record.content}\n"
-        f"  category={record.category} · learned={record.created_at.date().isoformat()} "
+        f"  namespace={record.namespace} · category={record.category} "
+        f"· learned={record.created_at.date().isoformat()} "
         f"· status={status}{replacement}"
     )
 
@@ -163,12 +167,14 @@ async def get_daily_card(period: str = "latest") -> str:
 async def review_long_term_memory(
     limit: int = 20,
     include_superseded: bool = False,
+    namespace: Literal["operational", "reflective", "all"] = "all",
 ) -> str:
     """List T3 memory for an explicit user review, without semantic ranking.
 
     Args:
         limit: Number of newest records to show, from 1 to 100.
         include_superseded: Include old records that are no longer current.
+        namespace: Review operational memory, reflective memory, or both.
 
     Returns:
         A newest-first audit list with memory ids, categories, learned dates and
@@ -176,11 +182,15 @@ async def review_long_term_memory(
     """
     safe_limit = max(1, min(limit, 100))
     service = await _get_service()
-    records = await service.list_memories(safe_limit, include_superseded)
+    namespaces = None if namespace == "all" else [namespace]
+    records = await service.list_memories(
+        safe_limit, include_superseded, namespaces
+    )
     if not records:
         return "T3 contains no matching long-term memories."
     header = (
         f"T3 review · {len(records)} record(s) · "
+        f"namespace={namespace} · "
         f"superseded={'included' if include_superseded else 'excluded'}"
     )
     return "\n\n".join([header, *(_format_memory(record) for record in records)])
@@ -190,6 +200,8 @@ async def review_long_term_memory(
 async def upsert_preference(
     content: str,
     category: MemoryCategory = "other",
+    namespace: MemoryNamespace = "operational",
+    confirmed_by_user: bool = False,
     supersedes_conflicting: bool = False,
 ) -> str:
     """Store a durable fact about the user, deduplicating against what is known.
@@ -199,6 +211,12 @@ async def upsert_preference(
             Python projects", not "yes, use that" — it has to make sense months
             later with no surrounding conversation.
         category: coding_style, tool_preference, behavioral_fact, schedule, other.
+            Reflective categories are confirmed_pattern, value, recurring_trigger,
+            helpful_strategy and identity_hypothesis.
+        namespace: operational for working preferences; reflective for a pattern,
+            value or identity hypothesis the user has explicitly reviewed.
+        confirmed_by_user: Must be true for reflective memory, and only after the
+            user confirms the proposed wording.
         supersedes_conflicting: Set true when this contradicts something the user
             said before, e.g. they changed their mind. The old record is closed
             and kept for history rather than overwritten.
@@ -210,13 +228,15 @@ async def upsert_preference(
     result = await service.upsert_preference(
         UpsertPreferenceRequest(
             content=content,
+            namespace=namespace,
             category=category,
+            confirmed_by_user=confirmed_by_user,
             supersedes_conflicting=supersedes_conflicting,
         )
     )
     lines = [
         f"{result.action}: [{result.record.id}] {result.record.content}",
-        f"category={result.record.category}",
+        f"namespace={result.record.namespace} · category={result.record.category}",
         f"reason={result.reason}",
     ]
     if result.matched_id is not None and result.matched_similarity is not None:
@@ -233,6 +253,7 @@ async def temporal_query(
     top_k: int = 5,
     time_window: Literal["7d", "30d", "90d", "1y", "all"] = "all",
     include_superseded: bool = False,
+    namespace: Literal["operational", "reflective", "all"] = "all",
 ) -> str:
     """Recall stored preferences relevant to a query, newest-weighted.
 
@@ -247,6 +268,7 @@ async def temporal_query(
         time_window: Only consider memories learned within this window.
         include_superseded: Include closed records, scored down. Useful when the
             user asks what they used to prefer.
+        namespace: Search operational memory, reflective memory, or both.
 
     Returns:
         A formatted context block, one memory per line with id, date and score.
@@ -265,6 +287,7 @@ async def temporal_query(
             top_k=top_k,
             time_window_days=windows[time_window],
             include_superseded=include_superseded,
+            namespaces=None if namespace == "all" else [namespace],
         )
     )
     header = (

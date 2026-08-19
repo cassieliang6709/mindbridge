@@ -65,6 +65,8 @@ ALTER TABLE rolling_summaries
 CREATE TABLE IF NOT EXISTS memory_vectors (
     id               BIGSERIAL PRIMARY KEY,
     content          TEXT        NOT NULL,
+    namespace        TEXT        NOT NULL DEFAULT 'operational'
+                                 CHECK (namespace IN ('operational', 'reflective')),
     category         TEXT        NOT NULL DEFAULT 'other',
     embedding        VECTOR({embedding_dim}) NOT NULL,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -75,8 +77,13 @@ CREATE TABLE IF NOT EXISTS memory_vectors (
     last_accessed_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS memory_vectors_open_idx
-    ON memory_vectors (category, created_at DESC)
+-- Existing databases predate the two T3 lanes. They remain operational by
+-- default; reflective memories are only created through a confirmed write.
+ALTER TABLE memory_vectors
+    ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'operational';
+
+CREATE INDEX IF NOT EXISTS memory_vectors_namespace_open_idx
+    ON memory_vectors (namespace, category, created_at DESC)
     WHERE valid_at IS NULL;
 
 -- Cosine ANN index. Rebuild (or raise lists) once the table is large; below a

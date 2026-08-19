@@ -25,6 +25,7 @@ from .memory import (
 from .models import (
     CardScope,
     MemoryHit,
+    MemoryNamespace,
     MemoryWithDecay,
     SessionBuffer,
     SummaryCard,
@@ -136,12 +137,14 @@ class MemoryService:
         """Dedup-then-write.
 
         1. Embed the incoming fact.
-        2. Find the nearest still-open record in the same category.
+        2. Find the nearest still-open record in the same namespace/category.
         3. At or above dedup_threshold: refresh it, insert nothing.
         4. Otherwise insert, and optionally close a conflicting neighbour.
         """
         [embedding] = await self.embedder.embed([request.content])
-        match = await self.vectors.nearest_open(embedding, request.category)
+        match = await self.vectors.nearest_open(
+            embedding, request.namespace, request.category
+        )
         similarity = match.similarity if match else None
 
         if match is not None and similarity is not None:
@@ -162,6 +165,7 @@ class MemoryService:
 
         record = await self.vectors.insert(
             request.content,
+            request.namespace,
             request.category,
             embedding,
             request.decay_factor,
@@ -172,7 +176,7 @@ class MemoryService:
             f"nearest open record cosine {similarity:.3f} < threshold "
             f"{self.settings.dedup_threshold:.2f}: new fact"
             if similarity is not None
-            else "no existing record in this category: new fact"
+            else "no existing record in this namespace/category: new fact"
         )
         if (
             request.supersedes_conflicting
@@ -198,10 +202,15 @@ class MemoryService:
         )
 
     async def list_memories(
-        self, limit: int = 50, include_superseded: bool = True
+        self,
+        limit: int = 50,
+        include_superseded: bool = True,
+        namespaces: list[MemoryNamespace] | None = None,
     ) -> list[MemoryWithDecay]:
         return await self.vectors.list_recent(
-            limit=limit, include_superseded=include_superseded
+            limit=limit,
+            include_superseded=include_superseded,
+            namespaces=namespaces,
         )
 
     async def list_turns_between(
@@ -231,6 +240,7 @@ class MemoryService:
             "k": request.top_k,
             "w": request.time_window_days,
             "c": sorted(request.categories) if request.categories else None,
+            "n": sorted(request.namespaces) if request.namespaces else None,
             "s": request.include_superseded,
         }
         normalised_query = request.query_string.strip().lower()
@@ -270,6 +280,7 @@ class MemoryService:
             top_k=request.top_k,
             time_window_days=request.time_window_days,
             categories=request.categories,
+            namespaces=request.namespaces,
             include_superseded=request.include_superseded,
         )
         result = TemporalQueryResult(
@@ -297,7 +308,7 @@ def format_context(hits: list[MemoryHit]) -> str:
     """
     if not hits:
         return "No stored memory matched this query."
-    lines = ["Known preferences (most relevant first):"]
+    lines = ["Known T3 memories (most relevant first):"]
     for hit in hits:
         state = (
             "open"
@@ -306,7 +317,8 @@ def format_context(hits: list[MemoryHit]) -> str:
         )
         lines.append(
             f"- [{hit.id}] {hit.content} "
-            f"(category={hit.category}, learned={hit.created_at.date().isoformat()}, "
+            f"(namespace={hit.namespace}, category={hit.category}, "
+            f"learned={hit.created_at.date().isoformat()}, "
             f"{state}, cosine={hit.cosine_similarity:.3f}, score={hit.score:.3f})"
         )
     return "\n".join(lines)

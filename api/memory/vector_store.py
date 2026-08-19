@@ -24,13 +24,14 @@ from ..embeddings import to_pgvector
 from ..models import (
     MemoryCategory,
     MemoryHit,
+    MemoryNamespace,
     MemoryRecord,
     MemoryWithDecay,
     UpsertAction,
 )
 
 _RECORD_COLUMNS = """
-    id, content, category, created_at, valid_at, superseded_by,
+    id, content, namespace, category, created_at, valid_at, superseded_by,
     access_count, decay_factor
 """
 
@@ -68,6 +69,7 @@ class VectorMemoryStore:
     async def nearest_open(
         self,
         embedding: list[float],
+        namespace: MemoryNamespace,
         category: MemoryCategory | None = None,
     ) -> NearestMatch | None:
         """Closest still-valid record, for the dedup decision."""
@@ -77,11 +79,13 @@ class VectorMemoryStore:
                    1 - (embedding <=> $1::vector) AS similarity
             FROM memory_vectors
             WHERE valid_at IS NULL
-              AND ($2::text IS NULL OR category = $2)
+              AND namespace = $2
+              AND ($3::text IS NULL OR category = $3)
             ORDER BY embedding <=> $1::vector
             LIMIT 1
             """,
             to_pgvector(embedding),
+            namespace,
             category,
         )
         if row is None:
@@ -93,17 +97,20 @@ class VectorMemoryStore:
     async def insert(
         self,
         content: str,
+        namespace: MemoryNamespace,
         category: MemoryCategory,
         embedding: list[float],
         decay_factor: float = 1.0,
     ) -> MemoryRecord:
         row = await self._pool.fetchrow(
             f"""
-            INSERT INTO memory_vectors (content, category, embedding, decay_factor)
-            VALUES ($1, $2, $3::vector, $4)
+            INSERT INTO memory_vectors
+                (content, namespace, category, embedding, decay_factor)
+            VALUES ($1, $2, $3, $4::vector, $5)
             RETURNING {_RECORD_COLUMNS}
             """,
             content,
+            namespace,
             category,
             to_pgvector(embedding),
             decay_factor,
@@ -164,6 +171,7 @@ class VectorMemoryStore:
         top_k: int = 5,
         time_window_days: int | None = None,
         categories: list[MemoryCategory] | None = None,
+        namespaces: list[MemoryNamespace] | None = None,
         include_superseded: bool = False,
     ) -> list[MemoryHit]:
         """Top-K by cosine similarity discounted by age.
@@ -183,14 +191,15 @@ class VectorMemoryStore:
                   AND ($4::int IS NULL
                        OR created_at >= now() - make_interval(days => $4::int))
                   AND ($5::text[] IS NULL OR category = ANY($5::text[]))
+                  AND ($6::text[] IS NULL OR namespace = ANY($6::text[]))
             )
             SELECT *,
-                   exp(-$6::double precision * decay_factor * age_days)
-                     * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $7::double precision END
+                   exp(-$7::double precision * decay_factor * age_days)
+                     * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $8::double precision END
                      AS decay_multiplier,
                    cosine_similarity
-                     * exp(-$6::double precision * decay_factor * age_days)
-                     * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $7::double precision END
+                     * exp(-$7::double precision * decay_factor * age_days)
+                     * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $8::double precision END
                      AS score
             FROM scored
             ORDER BY score DESC
@@ -201,6 +210,7 @@ class VectorMemoryStore:
             include_superseded,
             time_window_days,
             [str(category) for category in categories] if categories else None,
+            [str(namespace) for namespace in namespaces] if namespaces else None,
             self._decay_rate,
             self._superseded_penalty,
         )
@@ -214,6 +224,7 @@ class VectorMemoryStore:
         *,
         limit: int = 50,
         include_superseded: bool = True,
+        namespaces: list[MemoryNamespace] | None = None,
     ) -> list[MemoryWithDecay]:
         """Newest-first listing for the diary timeline.
 
@@ -228,11 +239,12 @@ class VectorMemoryStore:
                        EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0 AS age_days
                 FROM memory_vectors
                 WHERE ($2::boolean OR valid_at IS NULL)
+                  AND ($3::text[] IS NULL OR namespace = ANY($3::text[]))
             )
             SELECT *,
-                   exp(-$3::double precision * decay_factor * age_days)
+                   exp(-$4::double precision * decay_factor * age_days)
                      * CASE WHEN valid_at IS NULL
-                            THEN 1.0 ELSE $4::double precision END
+                            THEN 1.0 ELSE $5::double precision END
                      AS decay_multiplier
             FROM aged
             ORDER BY created_at DESC, id DESC
@@ -240,6 +252,7 @@ class VectorMemoryStore:
             """,
             limit,
             include_superseded,
+            [str(namespace) for namespace in namespaces] if namespaces else None,
             self._decay_rate,
             self._superseded_penalty,
         )

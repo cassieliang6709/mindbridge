@@ -70,11 +70,13 @@ MindBridge currently exposes four tools:
 - `get_daily_card` reads one T2 day card: what happened, observed facts and
   open threads. It does not change T3.
 - `review_long_term_memory` lists T3 records newest-first for an explicit
-  audit. It does not semantically rank results or bump access counts.
-- `temporal_query` recalls relevant preferences, newest-weighted, and returns
-  memory ids that should be cited when used.
-- `upsert_preference` stores a durable preference, refreshes a matching record,
-  or supersedes a conflicting record after approval.
+  audit. Pass `namespace=operational` or `namespace=reflective` to inspect the
+  lanes separately. It does not semantically rank results or bump access counts.
+- `temporal_query` recalls relevant T3 memory, newest-weighted, and can search
+  operational memory, reflective memory or both.
+- `upsert_preference` stores durable operational memory by default. Reflective
+  patterns, values and identity hypotheses are rejected unless the user has
+  confirmed the wording and the call sets `confirmed_by_user=true`.
 
 Useful requests to give Codex:
 
