@@ -94,6 +94,7 @@
 .flowArrow svg { width: 24px; }
 .extractionCard { background: linear-gradient(145deg, rgba(9, 45, 92, 0.94), rgba(4, 30, 67, 0.96)); }
 .extractionCard.write { border-color: rgba(73, 161, 255, 0.36); }
+.extractionCard.candidate { border-color: rgba(168, 132, 255, 0.5); }
 .extractionCard.supersede { border-color: rgba(232, 172, 68, 0.5); }
 .extractionCard.reject { border-color: rgba(246, 116, 128, 0.45); }
 .extractionCard ul { display: grid; gap: 10px; padding: 0; margin: 20px 0 0; list-style: none; }
@@ -115,6 +116,8 @@
 .answerTop svg { width: 17px; }
 .answerTop code { color: #7e9abd; }
 .answerCard h3 { margin: 26px 0 28px; max-width: 800px; font: 700 22px/1.5 var(--font-display), sans-serif; }
+.inferenceBadge { width: max-content; margin-top: 20px; padding: 7px 10px; border: 1px solid rgba(188, 151, 255, 0.35); border-radius: 999px; color: #d6c1ff; background: rgba(113, 70, 190, 0.16); font: 700 10px/1 var(--font-mono), monospace; }
+.inferenceBadge + h3 { margin-top: 16px; }
 .evidenceList { display: grid; gap: 10px; }
 .evidence { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 13px 14px; border-radius: 12px; background: rgba(128, 179, 242, 0.08); }
 .evidence div { display: grid; gap: 4px; }

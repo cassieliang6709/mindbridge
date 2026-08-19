@@ -1,14 +1,37 @@
 # MindBridge
 
-A long-term memory engine for LLMs, packaged as something a person actually
-uses: it parses the transcripts your local AI coding tools already write, turns
-each day into one memory card, and serves the same store to any MCP client.
-Parsing, storage and the MLX extraction path stay on your machine. Hosted
-extraction remains available as an explicit opt-in for generating training data.
+A reflective AI companion powered by a transparent temporal Memory Core. The
+product helps a person see what stayed, what changed, and what should no longer
+define them; the technical core preserves the source, time and validity of each
+memory instead of flattening a person into timeless vector chunks.
+
+The current shipped backend parses transcripts from local AI coding tools,
+builds daily memory cards, and serves the same T1/T2/T3 store to any MCP client.
+The public Companion Loop is a deterministic synthetic product demo; it does
+not connect to Cassie's private store. Parsing, storage and the MLX extraction
+path stay on the user's machine. Hosted extraction remains an explicit opt-in
+for generating training data.
 
 [Live site](https://mindbridge.liangyue.site) ·
 [Diary](https://mindbridge.liangyue.site/demo) ·
 [Interview demo](https://mindbridge.liangyue.site/interview-demo)
+
+## Two-minute interview demo
+
+Open the **[Companion Loop](https://mindbridge.liangyue.site/interview-demo)**
+([中文](https://mindbridge.liangyue.site/interview-demo/zh)) with no login:
+
+1. Click Day 01 → Day 04 to see an identity move from “memory tool” to
+   “reflective AI companion.”
+2. Notice that uncertainty becomes a candidate, not a silently stored fact;
+   only explicit confirmation supersedes the old identity.
+3. In **Memory Receipt**, ask what MindBridge is now, what changed, and what to
+   build next. Each answer exposes current and superseded evidence; the final
+   recommendation is labelled as an inference.
+
+All visible data is synthetic and deterministic. The page demonstrates product
+behavior safely; the repository contains the real temporal memory, REST, MCP,
+ingestion and local MLX implementation underneath it.
 
 ## Two capture paths
 

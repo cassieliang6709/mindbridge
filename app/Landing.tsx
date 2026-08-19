@@ -191,22 +191,22 @@ const benchRows: {
 const copy = {
   zh: {
     htmlLang: "zh-CN",
-    docTitle: "MindBridge — 自动把你的 AI 对话写成每日记忆",
+    docTitle: "MindBridge — 记住你的变化，而不只是事实",
     docDesc:
-      "MindBridge 解析本地 AI 编码工具的对话记录，自动生成每日记忆卡，并作为 MCP server 让任意客户端读写这份长期记忆。解析与存储默认全在本机。",
+      "MindBridge 是一款反思型 AI Companion：它用透明、可追溯、能识别变化的 Memory Core，帮助你看见什么没变、什么已经改变。",
     nav: ["两条捕获路径", "技术结构", "指标"],
-    demo: "打开日记界面",
-    stage: "本地闭环已跑通 · 公网展示为样例",
-    heroNote: "你已经跟 AI 说过的话，不该再说第二遍。",
+    demo: "试试 Companion Loop",
+    stage: "2 分钟可点击合成演示",
+    heroNote: "旧记忆，不该继续定义现在的你。",
     title: (
       <>
-        你的 AI 对话，
+        记住你的变化，
         <br />
-        自动写成 <em>每日记忆</em>。
+        而不只是 <em>记住事实</em>。
       </>
     ),
-    lede: "MindBridge 解析你本地 AI 编码工具的对话记录，每晚生成一张记忆卡；同时作为 MCP server，让任意客户端读写这份长期记忆。解析与存储都在本机。",
-    learn: "看两条捕获路径",
+    lede: "MindBridge 是反思型 AI Companion。它不会用错误或过期的记忆定义你；每次引用长期记忆，都能说明来源、时间，以及后来发生了什么变化。底层 Memory Core 本地优先。",
+    learn: "看 Memory Core",
     // phone 1 — daily card
     cardDate: "2026-08-04 · 周二",
     cardMeta: "自动生成",
@@ -360,22 +360,22 @@ const copy = {
   },
   en: {
     htmlLang: "en",
-    docTitle: "MindBridge — your AI conversations, written up as daily memory",
+    docTitle: "MindBridge — remember change, not just facts",
     docDesc:
-      "MindBridge parses the transcripts your local AI coding tools already write, turns each day into a memory card, and serves the same store to any MCP client. Parsing and storage are local by default.",
+      "A reflective AI companion with a transparent temporal Memory Core: trace what stayed, what changed, and what should no longer define you.",
     nav: ["Two capture paths", "Architecture", "Metrics"],
-    demo: "Open the diary",
-    stage: "Local loop verified · public site uses labelled sample data",
-    heroNote: "You already told an AI. You should not have to say it twice.",
+    demo: "Try the Companion Loop",
+    stage: "2-minute interactive synthetic demo",
+    heroNote: "An old memory should not define who you are now.",
     title: (
       <>
-        Your AI chats,
+        Remember change—
         <br />
-        written up as <em>daily memory</em>.
+        not just <em>facts</em>.
       </>
     ),
-    lede: "MindBridge parses the transcripts your local AI coding tools already write and turns each night into one memory card — while serving the same store to any MCP client. Parsing and storage stay on your machine.",
-    learn: "See both capture paths",
+    lede: "MindBridge is a reflective AI companion. It does not let wrong or outdated memories define you: every long-term memory can show its source, date, and what later changed. The Memory Core underneath is local-first.",
+    learn: "Inspect the Memory Core",
     cardDate: "2026-08-04 · Tue",
     cardMeta: "auto-generated",
     cardTitle: "Today's memory card",
@@ -709,7 +709,7 @@ export function Landing() {
           <h1>{t.title}</h1>
           <p className="lede">{t.lede}</p>
           <div className="hero-actions">
-            <Link className="store-button" href="/demo">
+            <Link className="store-button" href={locale === "zh" ? "/interview-demo/zh" : "/interview-demo"}>
               <ArrowRight weight="bold" />
               <span>
                 <small>{t.stage}</small>

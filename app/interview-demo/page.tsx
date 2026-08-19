@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { InterviewDemo } from "./InterviewDemo";
 
 export const metadata: Metadata = {
-  title: "Project Atlas — MindBridge interview demo",
+  title: "MindBridge Companion Loop — interview demo",
   description:
-    "A privacy-safe synthetic workspace showing how MindBridge writes, updates, rejects and recalls durable engineering memory.",
+    "A privacy-safe interactive scenario showing how MindBridge separates inference from confirmation, remembers change, and cites its memory.",
 };
 
 export default function InterviewDemoPage() {
