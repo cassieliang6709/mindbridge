@@ -282,6 +282,19 @@ project touches, tool usage, git branches, source labels and late-hour work.
 It enforces the same safety gate as manual proposals:
 at least 3 supporting observations across at least 2 distinct dates.
 
+Run on a schedule (optional) with its own launchd agent:
+
+```bash
+scripts/mindbridge-pattern-scheduler.sh install   # default 00:45
+scripts/mindbridge-pattern-scheduler.sh status
+scripts/mindbridge-pattern-scheduler.sh run-now
+MINDBRIDGE_PATTERN_APPLY=1 scripts/mindbridge-pattern-scheduler.sh install
+```
+
+The job is dry-run by default (`--apply` is never used unless
+`MINDBRIDGE_PATTERN_APPLY=1`); use that only when you are ready for real
+Pattern Candidate rows and after reviewing a dry-run sample.
+
 Measured on this machine (2026-08-04, `--since 7d`): 91 of 282 transcript files
 had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,
 with 8 suspected secrets masked. A second run read 2 files; `--full` re-read all
