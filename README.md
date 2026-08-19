@@ -288,6 +288,10 @@ Run on a schedule (optional) with its own launchd agent:
 scripts/mindbridge-pattern-scheduler.sh install   # default 00:45
 scripts/mindbridge-pattern-scheduler.sh status
 scripts/mindbridge-pattern-scheduler.sh run-now
+MINDBRIDGE_PATTERN_SINCE=14d \
+MINDBRIDGE_PATTERN_SCAN_LIMIT=180 \
+MINDBRIDGE_PATTERN_SUPPORTING=8 \
+MINDBRIDGE_PATTERN_DAILY_LIMIT=20 \
 MINDBRIDGE_PATTERN_APPLY=1 scripts/mindbridge-pattern-scheduler.sh install
 ```
 
