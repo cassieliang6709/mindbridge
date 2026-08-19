@@ -239,6 +239,79 @@ const copy = {
     ] as [string, string, number, boolean][],
     timelineCallout: "没被提起的记忆会自己变淡。",
     // paths
+    flowEyebrow: "技术架构",
+    flowTitle: "一条转录记录，从磁盘到可召回的记忆",
+    flowNote:
+      "每一层都标了它跑在哪里、由什么产生。规则计数与模型撰写分开标注，因为两者的可信度不同。",
+    flowStages: [
+      {
+        tag: "01",
+        name: "来源",
+        where: "本机磁盘",
+        local: true,
+        items: [
+          "~/.claude/projects/**/*.jsonl",
+          "~/.codex/archived_sessions/",
+        ],
+      },
+      {
+        tag: "02",
+        name: "Path A · 增量解析",
+        where: "本机 · 纯 Python，无模型",
+        local: true,
+        items: [
+          "字节游标断点续读",
+          "合并同 message.id（修正 2.5x token 重复计数）",
+          "密钥脱敏后才落库",
+        ],
+      },
+      {
+        tag: "03",
+        name: "T1 会话缓冲",
+        where: "Postgres",
+        local: true,
+        items: ["原始轮次 + project / git 分支 / 工具名"],
+      },
+      {
+        tag: "04",
+        name: "T2 每日卡",
+        where: "本机 · 规则计算",
+        local: true,
+        items: [
+          "从 T1 按整天重建，不依赖增量",
+          "计数、时间跨度、工具统计——可复现",
+        ],
+      },
+      {
+        tag: "05",
+        name: "M2 抽取",
+        where: "生成式模型（可选）",
+        local: false,
+        items: [
+          "散文叙述 + 结构化偏好 JSON",
+          "Pydantic 校验失败即带错误重试",
+          "唯一会把内容发出本机的一步",
+        ],
+      },
+      {
+        tag: "06",
+        name: "T3 长期记忆",
+        where: "pgvector · 本地 embedding",
+        local: true,
+        items: [
+          "写入前余弦去重（阈值 0.80）",
+          "operational / reflective 双通道",
+          "召回按 cosine × e^(-λΔt) 时间衰减",
+        ],
+      },
+    ],
+    flowConsumers: [
+      ["MCP 客户端", "Claude Code / Cursor / VS Code 直接读写同一份记忆"],
+      ["日记界面", "/demo 读同一个 API，连不上时降级为示例数据并标明"],
+      ["Pattern 循环", "模式候选 → 你确认 → 才写入 reflective 记忆"],
+    ],
+    flowLocalTag: "本机",
+    flowRemoteTag: "会出本机",
     pathsTitle: "两条捕获路径",
     pathsNote: "一条不用你动手，一条让模型自己来。两条写进同一个记忆层。",
     laneA: {
@@ -254,8 +327,20 @@ const copy = {
       status: "已可用",
       built: true,
       name: "主动 MCP 读写",
-      note: "挂成标准 MCP server，模型在对话里自己决定何时写入、何时召回。",
-      sources: ["get_daily_card", "get_daily_review", "review_long_term_memory", "temporal_query", "upsert_preference", "propose_pattern", "review_pattern_candidates", "resolve_pattern"],
+      note: "挂成标准 MCP server，模型在对话里自己决定何时写入、何时召回；记忆写入有用户确认，支持按 id 精修与归档。",
+      sources: [
+        "get_daily_card",
+        "get_daily_review",
+        "review_long_term_memory",
+        "temporal_query",
+        "upsert_preference",
+        "propose_pattern",
+        "review_pattern_candidates",
+        "resolve_pattern",
+        "get_memory_record",
+        "archive_memory",
+        "edit_memory",
+      ],
     },
     laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge 记忆层",
@@ -313,7 +398,7 @@ const copy = {
       "Docker 29.2.1 · Ollama 0.32.5 · Postgres / Redis healthy",
     ],
     setupOfficial: "查看 Claude Code 官方安装与系统要求",
-    usageEyebrow: "在 Codex / Claude Code 里的五步用法",
+    usageEyebrow: "在 Codex / Claude Code 里的六步用法",
     usageTitle: "先看今天，再区分工作偏好与关于自己的假设。",
     usageNote:
       "Daily Review 同时显示 T2、operational T3、reflective T3 与待确认 Pattern Candidate。推断必须先留在候选层；只有用户确认后才能进入 reflective T3。",
@@ -342,6 +427,11 @@ const copy = {
         "05 · 用户确认后再进入 Reflective T3",
         "确认、改写或拒绝都会留下 receipt；只有确认/改写会创建长期记忆。",
         "先让我查看候选；得到明确决定后再调用 resolve_pattern。",
+      ],
+      [
+        "06 · Memory Garden 精修",
+        "按 memory id 审核某条 T3，再决定是否改写或归档，旧版本仍可追溯。",
+        "调用 get_memory_record(42)；确认后调用 edit_memory(42, ...) 或 archive_memory(42)。",
       ],
     ] as [string, string, string][],
     trustEyebrow: "信任边界",
@@ -484,7 +574,7 @@ const copy = {
     errServer: "提交通道还没接上。",
     modes: [
       ["自动生成", "连上本地 agent，不用你主动写。", Sparkle],
-      ["MCP 原生", "八个工具，任意 MCP 客户端接入。", PlugsConnected],
+      ["MCP 原生", "十一个工具，任意 MCP 客户端接入。", PlugsConnected],
       ["本地优先", "对话与数据库都留在你机器上。", ShieldCheck],
     ] as [string, string, typeof Sparkle][],
     footer: ["源码", "日记界面", "联系"],
@@ -539,6 +629,79 @@ const copy = {
       ["Open to weekend work", "superseded by the 2026-07-28 record", 0.29, true],
     ] as [string, string, number, boolean][],
     timelineCallout: "Memory you stop mentioning fades on its own.",
+    flowEyebrow: "Architecture",
+    flowTitle: "One transcript, from disk to recallable memory",
+    flowNote:
+      "Each stage says where it runs and what produced it. Rule-computed and model-written are labelled separately, because they do not carry the same confidence.",
+    flowStages: [
+      {
+        tag: "01",
+        name: "Sources",
+        where: "local disk",
+        local: true,
+        items: [
+          "~/.claude/projects/**/*.jsonl",
+          "~/.codex/archived_sessions/",
+        ],
+      },
+      {
+        tag: "02",
+        name: "Path A · incremental parse",
+        where: "local · plain Python, no model",
+        local: true,
+        items: [
+          "byte cursors resume mid-file",
+          "merges records sharing message.id (fixes a 2.5x token overcount)",
+          "secrets masked before anything is stored",
+        ],
+      },
+      {
+        tag: "03",
+        name: "T1 session buffer",
+        where: "Postgres",
+        local: true,
+        items: ["raw turns + project / git branch / tool names"],
+      },
+      {
+        tag: "04",
+        name: "T2 day card",
+        where: "local · rule-computed",
+        local: true,
+        items: [
+          "rebuilt from T1 over the whole day, never from a delta",
+          "counts, spans, tool tallies — reproducible",
+        ],
+      },
+      {
+        tag: "05",
+        name: "M2 extraction",
+        where: "generative model (optional)",
+        local: false,
+        items: [
+          "prose narrative + structured preference JSON",
+          "Pydantic validation, repaired with the errors named",
+          "the only step that sends anything off the machine",
+        ],
+      },
+      {
+        tag: "06",
+        name: "T3 long-term memory",
+        where: "pgvector · local embeddings",
+        local: true,
+        items: [
+          "cosine dedup before write (threshold 0.80)",
+          "operational / reflective lanes",
+          "recall scored cosine × e^(-λΔt)",
+        ],
+      },
+    ],
+    flowConsumers: [
+      ["MCP clients", "Claude Code / Cursor / VS Code read and write the same memory"],
+      ["Diary UI", "/demo reads the same API; falls back to sample data and says so"],
+      ["Pattern loop", "candidate → you confirm → only then a reflective write"],
+    ],
+    flowLocalTag: "local",
+    flowRemoteTag: "leaves machine",
     pathsTitle: "Two capture paths",
     pathsNote:
       "One needs nothing from you. One lets the model do it. Both write to the same store.",
@@ -555,8 +718,20 @@ const copy = {
       status: "working today",
       built: true,
       name: "Active MCP read/write",
-      note: "Mounted as a standard MCP server, so the model decides mid-conversation when to write and when to recall.",
-      sources: ["get_daily_card", "get_daily_review", "review_long_term_memory", "temporal_query", "upsert_preference", "propose_pattern", "review_pattern_candidates", "resolve_pattern"],
+      note: "Mounted as a standard MCP server, so the model decides mid-conversation when to write, recall, and keep memory edits auditable.",
+      sources: [
+        "get_daily_card",
+        "get_daily_review",
+        "review_long_term_memory",
+        "temporal_query",
+        "upsert_preference",
+        "propose_pattern",
+        "review_pattern_candidates",
+        "resolve_pattern",
+        "get_memory_record",
+        "archive_memory",
+        "edit_memory",
+      ],
     },
     laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge memory layer",
@@ -618,7 +793,7 @@ const copy = {
       "Docker 29.2.1 · Ollama 0.32.5 · Postgres / Redis healthy",
     ],
     setupOfficial: "Read the official Claude Code installation requirements",
-    usageEyebrow: "FIVE STEPS IN CODEX / CLAUDE CODE",
+    usageEyebrow: "SIX STEPS IN CODEX / CLAUDE CODE",
     usageTitle: "Review today, then separate work preferences from hypotheses about yourself.",
     usageNote:
       "Daily Review separates T2, operational T3, reflective T3, and pending Pattern Candidates. An inference stays outside memory until the user confirms its wording.",
@@ -647,6 +822,11 @@ const copy = {
         "05 · Confirm before Reflective T3",
         "Confirm, edit, or reject with a receipt; only confirm/edit creates durable memory.",
         "Show me the candidate first. Call resolve_pattern only after my explicit decision.",
+      ],
+      [
+        "06 · Memory Garden repair path",
+        "Read one memory by id, then edit or archive it so your history stays transparent.",
+        "Call get_memory_record(42) first; then call edit_memory(42, ...) or archive_memory(42).",
       ],
     ] as [string, string, string][],
     trustEyebrow: "Trust boundaries",
@@ -796,7 +976,7 @@ const copy = {
     errServer: "The signup channel is not wired up yet.",
     modes: [
       ["Written for you", "Connect a local agent; stop journalling by hand.", Sparkle],
-      ["MCP native", "Eight tools, any MCP client.", PlugsConnected],
+      ["MCP native", "11 tools, any MCP client.", PlugsConnected],
       ["Local first", "Transcripts and database stay on your machine.", ShieldCheck],
     ] as [string, string, typeof Sparkle][],
     footer: ["Source", "Diary", "Contact"],
@@ -1039,7 +1219,14 @@ export function Landing({ locale }: { locale: Locale }) {
         </div>
         <div className="usage-grid">
           {t.usageItems.map(([title, note, prompt], index) => {
-            const Icon = [Book, Path, PlugsConnected, Sparkle, ShieldCheck][index];
+            const Icon = [
+              Book,
+              Path,
+              PlugsConnected,
+              Sparkle,
+              ShieldCheck,
+              Check,
+            ][index];
             return (
               <article className="usage-card" key={title}>
                 <span className="usage-icon"><Icon weight="fill" /></span>
@@ -1116,6 +1303,41 @@ export function Landing({ locale }: { locale: Locale }) {
         <div className="path-notes">
           <p className="local-note"><ShieldCheck weight="bold" />{t.localNote}</p>
           <p className="local-note"><Laptop weight="bold" />{t.coverage}</p>
+        </div>
+      </section>
+
+      <section id="architecture" className="archflow shell" aria-labelledby="arch-title">
+        <div className="how-heading">
+          <p className="eyebrow">{t.flowEyebrow}</p>
+          <p>{t.flowNote}</p>
+        </div>
+        <h2 id="arch-title" className="archflow-title">{t.flowTitle}</h2>
+
+        <ol className="archflow-stages">
+          {t.flowStages.map((stage) => (
+            <li className={`archflow-stage ${stage.local ? "is-local" : "is-remote"}`} key={stage.tag}>
+              <div className="archflow-stage-head">
+                <b>{stage.tag}</b>
+                <strong>{stage.name}</strong>
+                <span className={`archflow-where ${stage.local ? "" : "remote"}`}>
+                  {stage.local ? t.flowLocalTag : t.flowRemoteTag}
+                </span>
+              </div>
+              <p className="archflow-where-detail">{stage.where}</p>
+              <ul>
+                {stage.items.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </li>
+          ))}
+        </ol>
+
+        <div className="archflow-consumers">
+          {t.flowConsumers.map(([title, note]) => (
+            <div className="archflow-consumer" key={title}>
+              <strong>{title}</strong>
+              <small>{note}</small>
+            </div>
+          ))}
         </div>
       </section>
 

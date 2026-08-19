@@ -2533,3 +2533,182 @@ h3 {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* --- architecture flow ---------------------------------------------------
+   A numbered pipeline rather than a boxes-and-arrows diagram: the story is
+   sequential (disk -> T1 -> T2 -> extraction -> T3), and a vertical list keeps
+   that readable on a phone where a wide graph would not be.
+
+   Every stage declares whether it runs locally. Stage 05 is the only one that
+   leaves the machine, so it is the only one styled amber — the same language
+   the metrics table uses for "in progress" and the diary uses for
+   "model-written". One colour, one meaning, across the whole product.
+------------------------------------------------------------------------- */
+
+.archflow {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  padding: 22px 26px 26px;
+  border: 1px solid rgba(157, 195, 250, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgba(16, 58, 116, 0.55), rgba(12, 44, 93, 0.4));
+}
+
+.archflow-title {
+  margin: 14px 0 20px;
+  font-size: clamp(22px, 2.6vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+
+.archflow-stages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: stage;
+}
+
+.archflow-stage {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding: 13px 15px;
+  border: 1px solid rgba(145, 190, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(6, 22, 48, 0.5);
+}
+
+/* The one stage that sends data to a third party is visually distinct. */
+.archflow-stage.is-remote {
+  border-color: rgba(180, 121, 26, 0.5);
+  background: rgba(94, 68, 15, 0.22);
+}
+
+.archflow-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.archflow-stage-head b {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  padding: 3px 0;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #2786ff, #0754d0);
+  color: #fff;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+}
+
+.archflow-stage.is-remote .archflow-stage-head b {
+  background: linear-gradient(135deg, #d69e2e, #b4791a);
+}
+
+.archflow-stage-head strong {
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.archflow-where {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid rgba(143, 219, 168, 0.4);
+  border-radius: 999px;
+  color: #8fdba8;
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.archflow-where.remote {
+  border-color: rgba(214, 158, 46, 0.6);
+  color: #ffcf7a;
+}
+
+.archflow-where-detail {
+  margin: 0;
+  color: #8ea7c8;
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+}
+
+.archflow-stage ul {
+  display: grid;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archflow-stage ul li {
+  position: relative;
+  padding-left: 12px;
+  color: #d3e0f2;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.archflow-stage ul li::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(145, 190, 255, 0.55);
+}
+
+.archflow-consumers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(145, 190, 255, 0.16);
+}
+
+.archflow-consumer {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: rgba(6, 22, 48, 0.4);
+}
+
+.archflow-consumer strong {
+  font-size: 12.5px;
+}
+
+.archflow-consumer small {
+  color: #a9bfdc;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1020px) {
+  .archflow-stages,
+  .archflow-consumers {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .archflow {
+    padding: 18px;
+  }
+
+  .archflow-stages,
+  .archflow-consumers {
+    grid-template-columns: 1fr;
+  }
+}
