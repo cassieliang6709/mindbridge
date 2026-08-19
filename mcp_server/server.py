@@ -1,8 +1,8 @@
 """MindBridge MCP server.
 
-Exposes the two tools any MCP client can call: `upsert_preference` to write a
-fact and `temporal_query` to recall it. Both delegate to the same MemoryService
-the REST API uses, so behaviour cannot diverge between transports.
+Exposes read tools for T2 daily cards and T3 long-term memory, plus the existing
+preference write and semantic recall tools. Every tool delegates to the same
+MemoryService the REST API uses, so behaviour cannot diverge between transports.
 
 Run over stdio (how Claude Desktop, Claude Code and Cursor launch it):
 
@@ -43,6 +43,8 @@ from mcp.server.fastmcp import FastMCP
 
 from api.models import (
     MemoryCategory,
+    MemoryWithDecay,
+    SummaryCard,
     TemporalQueryRequest,
     UpsertPreferenceRequest,
 )
@@ -83,13 +85,105 @@ async def _get_service() -> MemoryService:
 mcp = FastMCP(
     "mindbridge",
     instructions=(
-        "Long-term memory for this user. Call temporal_query before answering "
-        "anything that depends on their preferences, habits or past decisions. "
-        "Call upsert_preference when they state a durable preference — not for "
-        "one-off instructions scoped to the current task. Cite the bracketed "
-        "memory ids from the returned context when you rely on them."
+        "Temporal memory for this user. T2 day cards describe what happened; "
+        "T3 records are durable preferences and confirmed facts. Call "
+        "get_daily_card when the user asks what they did on a day, and "
+        "review_long_term_memory when they ask what is remembered about them. "
+        "Call temporal_query before answering anything that depends on their "
+        "preferences, habits or past decisions. Call upsert_preference only for "
+        "a durable preference, not a one-off task instruction. Treat repeated "
+        "behaviour as a hypothesis, show supporting evidence and counterevidence, "
+        "and ask before turning it into T3. Cite bracketed ids when relying on memory."
     ),
 )
+
+
+def _format_daily_card(card: SummaryCard) -> str:
+    """Human-readable, source-labelled T2 context for an MCP client."""
+    lines = [
+        f"T2 day card [{card.id}] · {card.period}",
+        f"generated_by={card.generated_by}",
+        f"summary={card.summary}",
+    ]
+    if card.narrative:
+        lines.append(f"narrative={card.narrative}")
+    if card.developer_behavior_facts:
+        lines.append("observed facts:")
+        lines.extend(f"- {fact}" for fact in card.developer_behavior_facts)
+    if card.open_threads:
+        lines.append("open threads:")
+        lines.extend(f"- {thread}" for thread in card.open_threads)
+    lines.append(
+        "Boundary: this is a T2 record of observed work, not a durable trait or diagnosis."
+    )
+    return "\n".join(lines)
+
+
+def _format_memory(record: MemoryWithDecay) -> str:
+    status = (
+        f"superseded at {record.valid_at.date().isoformat()}"
+        if record.valid_at is not None
+        else "current"
+    )
+    replacement = (
+        f" · superseded_by=[{record.superseded_by}]"
+        if record.superseded_by is not None
+        else ""
+    )
+    return (
+        f"[{record.id}] {record.content}\n"
+        f"  category={record.category} · learned={record.created_at.date().isoformat()} "
+        f"· status={status}{replacement}"
+    )
+
+
+@mcp.tool()
+async def get_daily_card(period: str = "latest") -> str:
+    """Read one T2 day card so the user can review what they did.
+
+    Args:
+        period: ISO date such as 2026-08-19, or "latest" for the newest card.
+
+    Returns:
+        The card id, date, reproducible summary, observed facts, open threads and
+        optional model narrative. This is read-only and does not change T3.
+    """
+    service = await _get_service()
+    if period.strip().lower() == "latest":
+        cards = await service.list_summaries(limit=1, scope="day")
+        card = cards[0] if cards else None
+    else:
+        card = await service.get_summary(period.strip())
+    if card is None:
+        return f"No T2 day card found for {period!r}."
+    return _format_daily_card(card)
+
+
+@mcp.tool()
+async def review_long_term_memory(
+    limit: int = 20,
+    include_superseded: bool = False,
+) -> str:
+    """List T3 memory for an explicit user review, without semantic ranking.
+
+    Args:
+        limit: Number of newest records to show, from 1 to 100.
+        include_superseded: Include old records that are no longer current.
+
+    Returns:
+        A newest-first audit list with memory ids, categories, learned dates and
+        validity state. Listing is read-only and does not bump access counts.
+    """
+    safe_limit = max(1, min(limit, 100))
+    service = await _get_service()
+    records = await service.list_memories(safe_limit, include_superseded)
+    if not records:
+        return "T3 contains no matching long-term memories."
+    header = (
+        f"T3 review · {len(records)} record(s) · "
+        f"superseded={'included' if include_superseded else 'excluded'}"
+    )
+    return "\n\n".join([header, *(_format_memory(record) for record in records)])
 
 
 @mcp.tool()

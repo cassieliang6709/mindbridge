@@ -34,7 +34,13 @@ async def _mcp_query(query: str) -> str:
             tools = await session.list_tools()
             names = {tool.name for tool in tools.tools}
             _require(
-                {"upsert_preference", "temporal_query"} <= names,
+                {
+                    "get_daily_card",
+                    "review_long_term_memory",
+                    "upsert_preference",
+                    "temporal_query",
+                }
+                <= names,
                 f"MCP tools missing: {sorted(names)}",
             )
             result = await session.call_tool(

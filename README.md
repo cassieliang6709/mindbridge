@@ -43,9 +43,9 @@ works for tools that write such logs:
 - `~/.codex/archived_sessions/` (Codex CLI)
 
 **Path B — active MCP read/write.** Mounted as a standard MCP server exposing
-`upsert_preference` and `temporal_query`, so the model decides mid-conversation
-when to write and when to recall. Works with any MCP client — Claude Desktop,
-Claude Code, Cursor, VS Code.
+`get_daily_card` for T2, `review_long_term_memory` and `temporal_query` for T3,
+and `upsert_preference` for confirmed durable writes. Works with any MCP client
+— Codex, Claude Desktop, Claude Code, Cursor and VS Code.
 
 ChatGPT and web Claude expose no history API; they need a manual export and are
 out of scope for the automatic path. The landing page states this rather than
@@ -79,7 +79,7 @@ one Mac; it labels that state instead of presenting the sample as live.
 | Landing page (`/`) — two paths, architecture, metrics table, signup | done |
 | Diary (`/demo`) — daily card, memory timeline, raw T1/T2/T3 disclosure | done |
 | `api/` — FastAPI, three tiers, decay retrieval, dedup, query cache | done (M1) |
-| `mcp_server/` — `upsert_preference`, `temporal_query` over stdio | done (M3) |
+| `mcp_server/` — separate T2/T3 review, T3 recall and confirmed writes over stdio | done (M3) |
 | `evals/eval_memory_engine.py` — decay, dedup and token benchmarks | done |
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `/demo` wired to the API, with an offline fallback | done |
@@ -184,6 +184,12 @@ tool_timeout_sec = 60
 [mcp_servers.mindbridge.tools.temporal_query]
 approval_mode = "approve"
 
+[mcp_servers.mindbridge.tools.get_daily_card]
+approval_mode = "approve"
+
+[mcp_servers.mindbridge.tools.review_long_term_memory]
+approval_mode = "approve"
+
 [mcp_servers.mindbridge.tools.upsert_preference]
 approval_mode = "prompt"
 ```
@@ -197,8 +203,9 @@ ollama list                         # must include nomic-embed-text
 codex mcp list                      # mindbridge should be enabled
 ```
 
-Try: `Call MindBridge and tell me what writing preferences you remember. Cite
-the memory ids.` Reads can run directly; durable writes ask for confirmation.
+Try: `Call MindBridge's get_daily_card for the latest T2 card, then review the
+newest five T3 memories separately. Cite every card and memory id.` Reads can
+run directly; durable writes ask for confirmation.
 On 2026-08-19 a fresh Codex session called `temporal_query` against the local
 store and returned three real T3 records with source ids. This is a local
 integration, not a public hosted memory service; restarting Codex or opening a

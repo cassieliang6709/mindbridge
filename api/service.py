@@ -122,6 +122,12 @@ class MemoryService:
     ) -> list[SummaryCard]:
         return await self.summaries.list_cards(session_id, limit, scope)
 
+    async def get_summary(
+        self, period: str, session_id: str | None = None
+    ) -> SummaryCard | None:
+        """Read one T2 card without exposing the store through a transport."""
+        return await self.summaries.get(period, session_id)
+
     # --- T3 ---------------------------------------------------------------
 
     async def upsert_preference(
