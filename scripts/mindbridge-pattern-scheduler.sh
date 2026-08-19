@@ -112,6 +112,13 @@ case "${1:-status}" in
     else
       echo "log:       none yet ($LOG_DIR/pattern-discovery.log)"
     fi
+    echo "settings:"
+    echo "  since:               $SINCE"
+    echo "  scan_limit:          $SCAN_LIMIT"
+    echo "  supporting_threshold: $SUPPORTING"
+    echo "  daily_limit:         $DAILY_LIMIT"
+    echo "  apply_mode:          $PATTERN_APPLY"
+    echo "  python:              $PYTHON_BIN"
     ;;
   *)
     echo "usage: $0 {status|run-now|install|uninstall}" >&2
