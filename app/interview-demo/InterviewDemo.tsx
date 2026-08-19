@@ -106,8 +106,8 @@ const questions = [
     answerZh:
       "MindBridge 现在是反思型 AI 陪伴产品；Memory Core 是它的技术底座，让长期上下文可追溯、可修改，并能识别变化。",
     evidence: [
-      { id: 205, text: "Product: reflective AI companion", date: "Aug 14", score: "0.972 · current" },
-      { id: 206, text: "Memory Core is infrastructure", date: "Aug 14", score: "0.931 · current" },
+      { id: 205, text: "Product: reflective AI companion", textZh: "产品：反思型 AI 陪伴", date: "Aug 14", score: "0.972 · current" },
+      { id: 206, text: "Memory Core is infrastructure", textZh: "Memory Core 是底层基础设施", date: "Aug 14", score: "0.931 · current" },
     ],
   },
   {
@@ -118,8 +118,8 @@ const questions = [
     answerZh:
       "它最初是 Agent 记忆工具。系统识别到你的犹豫，但没有把猜测当成事实；直到你确认后，产品才更新为 AI 陪伴，记忆则成为底层壁垒。",
     evidence: [
-      { id: 205, text: "Reflective AI companion", date: "Aug 14", score: "0.958 · current" },
-      { id: 201, text: "Memory tool for AI agents", date: "Aug 12", score: "0.214 · superseded" },
+      { id: 205, text: "Reflective AI companion", textZh: "反思型 AI 陪伴", date: "Aug 14", score: "0.958 · current" },
+      { id: 201, text: "Memory tool for AI agents", textZh: "给 AI Agent 用的记忆工具", date: "Aug 12", score: "0.214 · superseded" },
     ],
   },
   {
@@ -130,8 +130,8 @@ const questions = [
     answerZh:
       "先做一条完整陪伴闭环：用户表达长期信息、审核候选记忆、后来改变它，并在未来收到一条附带 Memory Receipt 的反思。",
     evidence: [
-      { id: 205, text: "Reflective AI companion", date: "Aug 14", score: "0.944 · current" },
-      { id: 202, text: "Carry context across chats", date: "Aug 12", score: "0.836 · retained" },
+      { id: 205, text: "Reflective AI companion", textZh: "反思型 AI 陪伴", date: "Aug 14", score: "0.944 · current" },
+      { id: 202, text: "Carry context across chats", textZh: "让上下文跨对话延续", date: "Aug 12", score: "0.836 · retained" },
     ],
     inference: true,
   },
@@ -292,7 +292,7 @@ export function InterviewDemo({ locale = "en" }: { locale?: Locale }) {
               {query.evidence.map((item) => (
                 <div className={styles.evidence} key={`${selectedQuestion}-${item.id}`}>
                   <span className={styles.memoryId}>[{item.id}]</span>
-                  <div><strong>{item.text}</strong><small>{item.date} · cosine × time decay</small></div>
+                  <div><strong>{zh ? item.textZh : item.text}</strong><small>{item.date} · cosine × time decay</small></div>
                   <code>{item.score}</code>
                 </div>
               ))}
