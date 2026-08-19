@@ -20,6 +20,11 @@ HOUR="${MINDBRIDGE_PATTERN_HOUR:-0}"
 MINUTE="${MINDBRIDGE_PATTERN_MINUTE:-45}"
 PATH_VALUE="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 PATTERN_APPLY="${MINDBRIDGE_PATTERN_APPLY:-0}"
+SINCE="${MINDBRIDGE_PATTERN_SINCE:-30d}"
+SCAN_LIMIT="${MINDBRIDGE_PATTERN_SCAN_LIMIT:-365}"
+SUPPORTING="${MINDBRIDGE_PATTERN_SUPPORTING:-10}"
+DAILY_LIMIT="${MINDBRIDGE_PATTERN_DAILY_LIMIT:-40}"
+PYTHON_BIN="${MINDBRIDGE_PYTHON_BIN:-$REPO_ROOT/.venv/bin/python}"
 
 write_plist() {
   mkdir -p "$(dirname "$PLIST")" "$LOG_DIR"
@@ -35,7 +40,7 @@ write_plist() {
   <array>
     <string>/bin/bash</string>
     <string>$REPO_ROOT/scripts/nightly-patterns.sh</string>
-    <string>30d</string>
+    <string>$SINCE</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -43,6 +48,16 @@ write_plist() {
     <string>$PATH_VALUE</string>
     <key>MINDBRIDGE_PATTERN_APPLY</key>
     <string>$PATTERN_APPLY</string>
+    <key>MINDBRIDGE_PATTERN_SCAN_LIMIT</key>
+    <string>$SCAN_LIMIT</string>
+    <key>MINDBRIDGE_PATTERN_SUPPORTING</key>
+    <string>$SUPPORTING</string>
+    <key>MINDBRIDGE_PATTERN_DAILY_LIMIT</key>
+    <string>$DAILY_LIMIT</string>
+    <key>MINDBRIDGE_PATTERN_SINCE</key>
+    <string>$SINCE</string>
+    <key>MINDBRIDGE_PYTHON_BIN</key>
+    <string>$PYTHON_BIN</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>
@@ -78,7 +93,7 @@ case "${1:-status}" in
     echo "removed: $LABEL (logs kept in $LOG_DIR)"
     ;;
   run-now)
-    exec "$REPO_ROOT/scripts/nightly-patterns.sh" "30d"
+    exec "$REPO_ROOT/scripts/nightly-patterns.sh" "$SINCE"
     ;;
   status)
     if [[ -f "$PLIST" ]]; then
