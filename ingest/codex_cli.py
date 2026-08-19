@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import defaultdict
 import re
 from datetime import datetime
 from pathlib import Path
@@ -95,6 +96,13 @@ def parse_file(
     offset = start_offset
     lines_read = skipped = malformed = 0
     pending_tools: list[str] = []
+    # Codex reports the working directory once per turn in a `turn_context`
+    # record rather than on every message, so it has to be carried forward.
+    # Without this every Codex turn lands with project=None, and once Codex
+    # became the majority source the day cards started reading
+    # "led by unknown project" for most of the corpus.
+    current_cwd: str | None = None
+    seen_identities: dict[str, int] = defaultdict(int)
 
     for new_offset, line in iter_lines(path, start_offset):
         offset = new_offset
@@ -118,8 +126,17 @@ def parse_file(
             continue
         kind = payload.get("type")
 
-        if kind == "function_call":
-            name = payload.get("name")
+        if record.get("type") == "turn_context":
+            cwd = payload.get("cwd")
+            if isinstance(cwd, str) and cwd:
+                current_cwd = cwd
+            continue
+
+        # Newer rollouts emit `custom_tool_call` where older ones emitted
+        # `function_call`; accept both so a format change does not silently
+        # zero out the tool tallies.
+        if kind in ("function_call", "custom_tool_call", "local_shell_call"):
+            name = payload.get("name") or payload.get("tool_name")
             if isinstance(name, str):
                 # Attach to the next assistant turn, mirroring how Claude Code
                 # carries tool_use blocks inside the assistant message.
@@ -128,7 +145,7 @@ def parse_file(
 
         if kind == "reasoning" and not include_thinking:
             continue
-        if kind == "function_call_output" and not include_tool_io:
+        if kind in ("function_call_output", "custom_tool_call_output") and not include_tool_io:
             continue
 
         if kind != "message":
@@ -159,11 +176,20 @@ def parse_file(
         if tools:
             text = "\n".join([text, *(f"[tool:{name}]" for name in tools)])
 
-        # Rollouts carry no per-record id, so the key is a digest of the parts
-        # that identify the turn.
+        # Rollouts carry no per-record id, so the key is derived from what
+        # identifies the turn in the file. It deliberately excludes the turn
+        # TEXT: keying on text meant that teaching the parser to recognise a
+        # new tool-call type changed the rendered text, changed the key, and
+        # re-inserted every affected turn as a new row. A parser improvement
+        # must not look like new data.
+        #
+        # `seq` disambiguates the rare case of two turns sharing a session,
+        # timestamp and role.
+        identity = f"{session_id}|{created_at.isoformat()}|{role}"
+        seq = seen_identities[identity]
+        seen_identities[identity] += 1
         digest = hashlib.blake2b(
-            f"{session_id}|{created_at.isoformat()}|{role}|{text}".encode(),
-            digest_size=12,
+            f"{identity}|{seq}".encode(), digest_size=12
         ).hexdigest()
         turns.append(
             ParsedTurn(
@@ -178,8 +204,8 @@ def parse_file(
                 token_count=count_tokens(text),
                 token_source="local",
                 tool_names=tools,
-                cwd=None,
-                project=None,
+                cwd=current_cwd,
+                project=Path(current_cwd).name if current_cwd else None,
                 git_branch=None,
                 redactions=redactions,
             )
