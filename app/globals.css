@@ -678,6 +678,166 @@ h3 {
   color: #8fdba8;
 }
 
+/* --- live Codex integration -------------------------------------------- */
+
+.codex-live {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 28px;
+  margin-top: 20px;
+  padding: 28px;
+  border: 1px solid rgba(118, 188, 255, 0.3);
+  border-radius: 18px;
+  background: linear-gradient(125deg, rgba(7, 30, 68, 0.92), rgba(12, 57, 115, 0.72));
+  box-shadow: 0 20px 48px rgba(0, 8, 28, 0.22);
+}
+
+.codex-live-copy h2 {
+  margin: 12px 0 14px;
+  font-size: clamp(28px, 3.2vw, 46px);
+  line-height: 1.03;
+  letter-spacing: -0.05em;
+}
+
+.codex-live-copy > p:not(.eyebrow) {
+  margin: 0;
+  color: #b9cce5;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.codex-proof {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 20px;
+  color: #91ddb0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.codex-proof svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.codex-terminal {
+  padding: 20px;
+  border: 1px solid rgba(132, 187, 255, 0.22);
+  border-radius: 15px;
+  background: rgba(2, 15, 36, 0.82);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.codex-terminal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(134, 181, 244, 0.14);
+}
+
+.codex-terminal-head span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.codex-terminal-head svg {
+  width: 18px;
+  color: #78b4ff;
+}
+
+.codex-terminal-head em {
+  color: #8fdba8;
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.codex-steps {
+  display: grid;
+  gap: 9px;
+  margin: 16px 0;
+}
+
+.codex-steps div {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  gap: 9px;
+  color: #c9d9ed;
+  font-size: 11px;
+}
+
+.codex-steps b {
+  color: #6faeff;
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+}
+
+.codex-prompt {
+  display: block;
+  padding: 13px;
+  border-radius: 10px;
+  color: #b9dbff;
+  background: rgba(70, 132, 211, 0.11);
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.codex-install {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 13px;
+  border: 1px solid rgba(112, 178, 255, 0.24);
+  border-radius: 11px;
+  background: rgba(19, 83, 162, 0.13);
+}
+
+.codex-install code {
+  color: #d2e7ff;
+  font-family: var(--font-mono), monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.codex-install button {
+  width: max-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(114, 181, 255, 0.32);
+  border-radius: 8px;
+  color: #9fceff;
+  background: rgba(30, 106, 202, 0.18);
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.codex-install button:hover {
+  color: #fff;
+  border-color: #6cb1ff;
+}
+
+.codex-terminal small {
+  display: block;
+  margin-top: 12px;
+  color: #728cac;
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -1669,6 +1829,10 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .codex-live {
+    grid-template-columns: 1fr;
+  }
+
   .merge svg {
     rotate: 90deg;
   }
@@ -1754,6 +1918,7 @@ h3 {
 
   .how,
   .arch,
+  .codex-live,
   .waitlist {
     padding: 18px;
   }

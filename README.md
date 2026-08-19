@@ -168,6 +168,42 @@ Register the MCP server with Claude Desktop, Claude Code, Cursor or VS Code:
 }
 ```
 
+### Use MindBridge inside Codex
+
+Codex supports local STDIO MCP servers. Point it at the repository virtualenv,
+then set the repository as the server working directory:
+
+```toml
+[mcp_servers.mindbridge]
+command = "/absolute/path/to/mindbridge/.venv/bin/python"
+args = ["-m", "mcp_server.server"]
+cwd = "/absolute/path/to/mindbridge"
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+[mcp_servers.mindbridge.tools.temporal_query]
+approval_mode = "approve"
+
+[mcp_servers.mindbridge.tools.upsert_preference]
+approval_mode = "prompt"
+```
+
+Start Postgres, Redis and the configured local embedder before opening a fresh
+Codex session:
+
+```bash
+docker compose up -d db redis
+ollama list                         # must include nomic-embed-text
+codex mcp list                      # mindbridge should be enabled
+```
+
+Try: `Call MindBridge and tell me what writing preferences you remember. Cite
+the memory ids.` Reads can run directly; durable writes ask for confirmation.
+On 2026-08-19 a fresh Codex session called `temporal_query` against the local
+store and returned three real T3 records with source ids. This is a local
+integration, not a public hosted memory service; restarting Codex or opening a
+new session is required after changing MCP configuration.
+
 Both transports call the same `MemoryService`, so `upsert_preference` over MCP
 and `POST /memories` over HTTP cannot drift apart.
 

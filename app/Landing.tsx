@@ -266,6 +266,21 @@ const copy = {
       "本地路径已跑通：Qwen2.5-3B MLX LoRA 在本机把 transcript 抽成 schema JSON，并经同一个 MemoryService 写入 T2/T3。托管抽取仍保留为生成训练数据的显式选项，只有传入 --send-to-provider 才会发送摘录。",
     coverage:
       "覆盖范围说清楚：路径 A 只对有本地结构化日志的工具成立（Claude Code、Codex CLI）；路径 B 对任意 MCP 客户端成立。ChatGPT 与网页版 Claude 的历史没有 API，只能手动导出，不在自动范围内。",
+    codexEyebrow: "已接入真实客户端",
+    codexTitle: "不只展示页面。MindBridge 已经跑在 Codex 里。",
+    codexNote:
+      "Codex 通过本地 STDIO MCP 启动 MindBridge，实时调用同一个 MemoryService：查询可以直接执行，长期写入需要用户确认。数据层是本机 Postgres / pgvector、Redis 与 Ollama。",
+    codexProof: "2026-08-19 本机验证：新 Codex 会话成功召回 3 条真实 T3 记忆并引用 memory ids。",
+    codexSteps: [
+      ["01", "把下面的安装指令粘贴进 Codex"],
+      ["02", "Codex 完成本地安装后，新开一个会话"],
+      ["03", "查询、确认写入，再跨会话检查来源 ids"],
+    ] as [string, string][],
+    codexPrompt: "请调用 MindBridge，告诉我你记得的写作偏好，并标注 memory ids。",
+    codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally and connect it to this Codex client.",
+    codexCopy: "复制安装指令",
+    codexCopied: "已复制，粘贴进 Codex",
+    codexBoundary: "本机验证，不是公网托管服务；需要本地数据层运行。公开 Companion Loop 使用合成数据。",
     archTitle: "技术结构",
     archNote:
       "Python · FastAPI · Qwen2.5-3B 4-bit + MLX LoRA · MLX-LM · MCP · Postgres/pgvector · Redis · Docker",
@@ -437,6 +452,21 @@ const copy = {
       "The local path now works end to end: a Qwen2.5-3B MLX LoRA model turns transcript excerpts into schema-valid JSON on this Mac, then the shared MemoryService writes T2/T3. Hosted extraction remains an explicit training-data option and sends excerpts only with --send-to-provider.",
     coverage:
       "Stated plainly: Path A only works for tools that already write structured local logs (Claude Code, Codex CLI). Path B works with any MCP client. ChatGPT and web Claude expose no history API — those need a manual export and are out of scope for the automatic path.",
+    codexEyebrow: "VERIFIED IN A REAL CLIENT",
+    codexTitle: "Not just a web mockup. MindBridge now runs inside Codex.",
+    codexNote:
+      "Codex starts MindBridge over local STDIO MCP and calls the same MemoryService in real time: reads can run directly, while durable writes require user confirmation. The data layer is local Postgres / pgvector, Redis and Ollama.",
+    codexProof: "Local verification on Aug 19, 2026: a fresh Codex session recalled three real T3 memories and cited their memory ids.",
+    codexSteps: [
+      ["01", "Paste the install instruction below into Codex"],
+      ["02", "After local setup finishes, open a fresh session"],
+      ["03", "Query, confirm a write, then inspect ids across sessions"],
+    ] as [string, string][],
+    codexPrompt: "Call MindBridge and tell me what writing preferences you remember. Cite the memory ids.",
+    codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally and connect it to this Codex client.",
+    codexCopy: "Copy install instruction",
+    codexCopied: "Copied — paste it into Codex",
+    codexBoundary: "Verified locally, not a public hosted memory service; the local data layer must be running. The public Companion Loop uses synthetic data.",
     archTitle: "Architecture",
     archNote:
       "Python · FastAPI · Qwen2.5-3B 4-bit + MLX LoRA · MLX-LM · MCP · Postgres/pgvector · Redis · Docker",
@@ -677,6 +707,7 @@ function Waitlist({ locale }: { locale: Locale }) {
 
 export function Landing() {
   const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const [installCopied, setInstallCopied] = useState(false);
   const t = copy[locale];
 
   return (
@@ -855,6 +886,44 @@ export function Landing() {
           <Warning weight="bold" />
           {t.extractorNote}
         </p>
+      </section>
+
+      <section className="codex-live shell" id="codex-live">
+        <div className="codex-live-copy">
+          <p className="eyebrow">{t.codexEyebrow}</p>
+          <h2>{t.codexTitle}</h2>
+          <p>{t.codexNote}</p>
+          <span className="codex-proof">
+            <Check weight="bold" />
+            {t.codexProof}
+          </span>
+        </div>
+        <div className="codex-terminal">
+          <div className="codex-terminal-head">
+            <span><PlugsConnected weight="fill" /> Codex × MindBridge</span>
+            <em>{locale === "zh" ? "本地已验证" : "LOCALLY VERIFIED"}</em>
+          </div>
+          <div className="codex-steps">
+            {t.codexSteps.map(([number, step]) => (
+              <div key={number}><b>{number}</b><span>{step}</span></div>
+            ))}
+          </div>
+          <div className="codex-install">
+            <code>{t.codexInstallPrompt}</code>
+            <button
+              type="button"
+              onClick={async () => {
+                await navigator.clipboard.writeText(t.codexInstallPrompt);
+                setInstallCopied(true);
+                window.setTimeout(() => setInstallCopied(false), 2200);
+              }}
+            >
+              {installCopied ? t.codexCopied : t.codexCopy}
+            </button>
+          </div>
+          <code className="codex-prompt">{t.codexPrompt}</code>
+          <small>{t.codexBoundary}</small>
+        </div>
       </section>
 
       <section id="arch" className="arch shell">
