@@ -73,6 +73,21 @@ automatic transcript extraction continues to write operational memory only.
 An MBTI-like label can therefore be generated as a dated, sourced hypothesis,
 not silently stored as a fact about the person.
 
+### Memory Garden (audit + controlled mutation)
+
+MindBridge exposes a deliberate “Memory Garden” operation surface for humans:
+
+- `GET /memories/{memory_id}` fetches one memory by id with current decay state,
+  so a user can inspect exactly what is currently asserted or closed.
+- `PATCH /memories/{memory_id}` performs one explicit action:
+  - `{"action":"archive"}` closes a memory without replacing it.
+  - `{"action":"edit", "content":"..."}` creates a replacement memory and
+    supersedes the old row so provenance is preserved.
+
+Both actions are non-destructive to history: closed rows stay queryable and a
+replacement is always auditable through `superseded_by`, matching the companion
+story of “what changed” instead of silently overwriting personality data.
+
 T1 also stores the project, git branch and tool names of each turn. That is what
 lets a day card be rebuilt over the whole day from Postgres: building it from
 only the turns an incremental run happened to parse would rewrite a full card
@@ -261,6 +276,8 @@ and `POST /memories` over HTTP cannot drift apart.
 | `POST /summaries` · `GET /summaries` | T2 | write and list period cards |
 | `POST /memories` | T3 | dedup-then-write operational or confirmed reflective memory |
 | `GET /memories?namespace=` | T3 | newest-first listing, optionally one namespace |
+| `GET /memories/{memory_id}` | T3 | read one memory with current decay score |
+| `PATCH /memories/{memory_id}` | T3 | Memory Garden mutate actions: archive or edit |
 | `GET /turns?start=&end=` | T1 | raw turns in a range; the caller owns the timezone |
 | `POST /memories/query` | T3 | time-decayed top-K recall, optionally one namespace |
 | `POST /patterns` · `GET /patterns` | Reflection | create/review candidates outside T3 |
@@ -560,22 +577,91 @@ discriminating signal.
 
 ## Implemented architecture
 
-```
-jsonl / MCP → T1 buffer → extract → cosine dedup → pgvector
-                                                       ↓
-                            memory card ← temporal_query → MCP client
+```mermaid
+flowchart LR
+    subgraph SRC["Local transcripts · read-only"]
+        direction TB
+        CC["~/.claude/projects/*.jsonl"]
+        CX["~/.codex/sessions + archived"]
+    end
+
+    subgraph ING["Path A · ingest/"]
+        direction TB
+        RD["readers<br/>claude_code · codex_cli"]
+        RX["redaction.py<br/>mask secrets"]
+        DG["digest.py<br/>source_key"]
+        RD --> RX --> DG
+    end
+
+    subgraph M2["M2 · extract/"]
+        direction TB
+        PV["providers.py<br/>claude-cli · mlx · openai · gemini"]
+        SC["schemas.py<br/>validate + repair"]
+        DS["dataset.py<br/>extraction.jsonl"]
+        PV --> SC --> DS
+    end
+
+    subgraph STORE["Postgres + pgvector"]
+        direction TB
+        T1["T1 session_turns"]
+        T2["T2 rolling_summaries"]
+        T3["T3 memory_vectors<br/>bitemporal"]
+        PC["pattern_candidates"]
+    end
+
+    subgraph SERVE["Serving"]
+        direction TB
+        MCP["mcp_server<br/>11 MCP tools"]
+        API["api/main.py<br/>FastAPI"]
+    end
+
+    EMB["embeddings<br/>nomic-embed-text"]
+    LORA["train/<br/>MLX LoRA"]
+    CLI["Codex · Claude Code<br/>Cursor · VS Code"]
+
+    CC --> RD
+    CX --> RD
+    DG --> T1
+    T1 -->|nightly| T2
+    T2 --> PV
+    SC -->|prose| T2
+    SC -->|preferences| T3
+    DS -.->|teacher rows| LORA
+    LORA -.-> PV
+
+    T3 <--> EMB
+    T2 & T3 & PC <--> MCP
+    T3 --> API
+    MCP <-->|writes need confirmation| CLI
+
+    classDef remote fill:#3a2c10,stroke:#b4791a,color:#f3e2c4;
+    class PV remote;
 ```
 
-- **Ingest** — incremental `jsonl` parsing split by session; FastAPI endpoints
-  for sessions, preferences, and recall; one nightly batch writes the card.
-- **Extraction** — Qwen2.5-3B-Instruct-4bit tuned with MLX LoRA on 198 fit rows
-  (34 training-side validation rows; 45 date-isolated holdout rows), served by
-  `mlx_lm.server` on the Mac and retried only after a schema failure.
-- **Storage** — T1 session buffer, T2 rolling summary, T3 pgvector with time
-  decay over `created_at` / `valid_at`.
-- **Caching** — bounded in-process LRU plus Redis exact-key caching. Semantic
-  neighbour matching is implemented but off: unrelated short questions scored
-  0.9992, above the 0.9064 true paraphrase, so no tested threshold was safe.
+Reading the diagram:
+
+- **Ingest is idempotent.** `source_key` is derived from session, timestamp and
+  position — never from turn text — so re-parsing a file inserts 0 rows even
+  after a reader change alters how a turn renders.
+- **Only the amber box can leave the machine.** `claude-cli` and `mlx` are
+  local; `openai` and `gemini` send excerpts, and only when
+  `--send-to-provider` is passed explicitly.
+- **T3 is bitemporal.** `created_at` is when it was learned, `valid_at` when it
+  stopped being true. Superseded rows are closed, never deleted.
+- **Embeddings never generate.** `nomic-embed-text` (768-dim, local) does
+  write-time cosine dedup at 0.80 and retrieval scoring
+  (`cosine x exp(-0.01 x days)`); every word of prose comes from the M2 box.
+- **Patterns stay outside T3.** `propose_pattern` writes a candidate; only an
+  explicit `resolve_pattern` decision promotes it.
+
+- **The LoRA box is one adapter, not a second system.**
+  Qwen2.5-3B-Instruct-4bit tuned on 198 fit rows (34 training-side validation,
+  45 date-isolated holdout), served by `mlx_lm.server` on this Mac and retried
+  only after a schema failure.
+- **Caching sits beside the API, deliberately half-off.** Bounded in-process
+  LRU plus Redis exact-key caching. Semantic neighbour matching is implemented
+  but disabled: unrelated short questions scored 0.9992, above the 0.9064 true
+  paraphrase, so no tested threshold was safe.
 
 ## Developer-preview signups
 
