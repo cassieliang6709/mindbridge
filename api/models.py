@@ -55,6 +55,10 @@ class Turn(BaseModel):
     tool: str | None = None
     token_count: int
     created_at: datetime
+    # Written by ingest, not by append(): a turn created through the REST API
+    # has no project. Readers that summarise a day use it to name the project a
+    # day was mostly spent in, so it has to survive the trip out of Postgres.
+    project: str | None = None
 
 
 class TurnCreate(BaseModel):

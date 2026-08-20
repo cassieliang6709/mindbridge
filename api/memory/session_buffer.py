@@ -42,7 +42,8 @@ class SessionBufferStore:
             """
             INSERT INTO session_turns (session_id, role, content, tool, token_count)
             VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, session_id, role, content, tool, token_count, created_at
+            RETURNING id, session_id, role, content, tool, token_count, created_at,
+                      project
             """,
             session_id,
             turn.role,
@@ -153,7 +154,8 @@ class SessionBufferStore:
         limit = window or self._window
         rows = await self._pool.fetch(
             """
-            SELECT id, session_id, role, content, tool, token_count, created_at
+            SELECT id, session_id, role, content, tool, token_count, created_at,
+                   project
             FROM (
                 SELECT *
                 FROM session_turns
@@ -188,7 +190,8 @@ class SessionBufferStore:
         """Turns in a half-open [start, end) window, oldest first."""
         rows = await self._pool.fetch(
             """
-            SELECT id, session_id, role, content, tool, token_count, created_at
+            SELECT id, session_id, role, content, tool, token_count, created_at,
+                   project
             FROM session_turns
             WHERE created_at >= $1 AND created_at < $2
               AND ($4::text IS NULL OR tool = $4)
@@ -220,7 +223,8 @@ class SessionBufferStore:
         limit = window or self._window
         rows = await self._pool.fetch(
             """
-            SELECT id, session_id, role, content, tool, token_count, created_at
+            SELECT id, session_id, role, content, tool, token_count, created_at,
+                   project
             FROM session_turns
             WHERE session_id = $1
             ORDER BY created_at ASC, id ASC
