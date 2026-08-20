@@ -138,6 +138,7 @@ retrieval-quality numbers measured under it.
 
 ```bash
 cp .env.example .env
+.venv/bin/pip install -e .        # puts `mindbridge` and `mindbridge-mcp` in .venv/bin
 docker compose up -d db redis     # Postgres+pgvector on :5433, Redis on :6379
 docker compose up -d api          # FastAPI on :8000, OpenAPI at /docs
 curl localhost:8000/healthz
@@ -302,15 +303,20 @@ at least 3 supporting observations across at least 2 distinct dates.
 Run on a schedule (optional) with its own launchd agent:
 
 ```bash
-scripts/mindbridge-pattern-scheduler.sh install   # default 00:45
-scripts/mindbridge-pattern-scheduler.sh status
-scripts/mindbridge-pattern-scheduler.sh run-now
+mindbridge schedule patterns install             # default 00:45; prints, writes nothing
+mindbridge schedule patterns install --confirm
+mindbridge schedule patterns status
+mindbridge schedule patterns run-now
 MINDBRIDGE_PATTERN_SINCE=14d \
 MINDBRIDGE_PATTERN_SCAN_LIMIT=180 \
 MINDBRIDGE_PATTERN_SUPPORTING=8 \
 MINDBRIDGE_PATTERN_DAILY_LIMIT=20 \
-MINDBRIDGE_PATTERN_APPLY=1 scripts/mindbridge-pattern-scheduler.sh install
+MINDBRIDGE_PATTERN_APPLY=1 mindbridge schedule patterns install
 ```
+
+The tuning above is written into the plist's environment, so `install` without
+`--confirm` is also how you read back what a scheduled run would actually do
+before agreeing to it.
 
 The job is dry-run by default (`--apply` is never used unless
 `MINDBRIDGE_PATTERN_APPLY=1`); use that only when you are ready for real
@@ -321,20 +327,79 @@ had new content, yielding 3,067 T1 turns across 51 sessions and 5 T2 day cards,
 with 8 suspected secrets masked. A second run read 2 files; `--full` re-read all
 3,065 turns and inserted 0.
 
+## The `mindbridge` CLI
+
+One entry point for the four things an operator actually does:
+
+```bash
+mindbridge doctor                       # read-only check of the whole local loop
+mindbridge ingest --since 3d            # Path A, the same job the nightly agent runs
+mindbridge patterns --since 30d         # dry run; --apply writes candidates
+mindbridge mcp                          # serve the eleven tools over stdio
+mindbridge install claude|codex         # register the MCP server with a client
+mindbridge schedule ingest|patterns ... # status | run-now | install | uninstall
+mindbridge verify --plan                # what the local-loop proof would start
+```
+
+`schedule ... install` prints the exact plist it would write and stops.
+`--confirm` is what writes it, because a LaunchAgent is a persistent change to
+the machine. `status`, `run-now` and the preview change nothing.
+
+Unknown flags pass through to `ingest.runner` and `scripts.suggest_patterns`, so
+`mindbridge ingest --full --status` and `mindbridge patterns --card-limit 90`
+still reach the options those modules already had.
+
+`mindbridge-mcp` is the second console script and the reason the packaging
+exists: it needs no working directory and no shell wrapper, and it chdirs into
+the checkout before `Settings` reads the relative `.env`. A client that launched
+the server from its own cwd would otherwise fall back to the `hashing` embedder
+without ever saying so.
+
+The eleven memory tools are deliberately **not** mirrored as commands. Reading
+and revising memory happens over MCP, inside a client that has the conversation
+as context; a second copy of that surface in a terminal would be two things to
+keep honest instead of one.
+
+`scripts/nightly-ingest.sh`, `scripts/nightly-patterns.sh` and
+`scripts/run-mcp.sh` are now one-line shims over these commands. They stay
+because installed LaunchAgents and already-registered MCP clients point at those
+exact paths, so upgrading requires no re-install.
+
+`doctor` names the thing it read on every line and writes nothing — no schema,
+no launchd agent, no compose lifecycle. Read on this machine, 2026-08-20:
+
+```
+[ok  ] postgres          T1 24542 turns · T2 674 cards · T3 575 memories · 0 pattern candidates
+                         ↳ postgresql://mindbridge:mindbridge@localhost:5433/mindbridge
+[ok  ] vector width      vector(768) matches configured dim
+[ok  ] ingest freshness  newest T1 turn 2026-08-19 17:38 (0d old)
+[FAIL] embeddings        ollama unreachable at http://localhost:11434: ConnectError
+                         ↳ ollama serve
+[warn] mlx extractor     not serving at http://127.0.0.1:8080/v1 — local extraction unavailable
+```
+
+It exits 1 when any line reads FAIL, which makes it usable as a pre-demo gate.
+
 ## Running Path A on a schedule
 
 ```bash
-scripts/mindbridge-scheduler.sh status      # installed? when did it last run?
-scripts/mindbridge-scheduler.sh run-now     # run once, in the foreground
-scripts/mindbridge-scheduler.sh install     # schedule it nightly at 23:30
-scripts/mindbridge-scheduler.sh uninstall   # remove the schedule
+mindbridge schedule ingest status              # installed? when did it last run?
+mindbridge schedule ingest run-now             # run once, in the foreground
+mindbridge schedule ingest install             # print the plist, write nothing
+mindbridge schedule ingest install --confirm   # schedule it nightly at 23:30
+mindbridge schedule ingest uninstall           # remove the schedule
 ```
 
-`install` writes `~/Library/LaunchAgents/com.mindbridge.nightly-ingest.plist`
+`install --confirm` writes `~/Library/LaunchAgents/com.mindbridge.nightly-ingest.plist`
 and registers it with launchd. That is a persistent change to the machine, so it
-is opt-in and never happens as part of a build or a test — `status` and
-`run-now` change nothing. Override the hour with `MINDBRIDGE_INGEST_HOUR` /
-`MINDBRIDGE_INGEST_MINUTE`.
+is opt-in and never happens as part of a build or a test — `status`, `run-now`
+and `install` without `--confirm` change nothing. Override the hour with
+`MINDBRIDGE_INGEST_HOUR` / `MINDBRIDGE_INGEST_MINUTE`.
+
+`scripts/mindbridge-scheduler.sh` still works and forwards these arguments
+verbatim. The plist the CLI generates parses to the same dictionary the shell
+script wrote — checked by comparing `plistlib.loads` of both against the agent
+installed on this machine — so an already-installed agent needs no re-install.
 
 The job is safe to repeat: turns are keyed by source record, and day cards are
 rebuilt from the database rather than from the delta. If Docker Desktop is not
@@ -695,15 +760,26 @@ verifies the same store through REST, the Diary route and an actual MCP stdio
 client:
 
 ```bash
-scripts/verify-local-loop.sh             # reuse the newest MLX-written day
-scripts/verify-local-loop.sh 2026-08-08  # or name a T2 day card explicitly
+mindbridge verify --plan             # probe everything, start nothing
+mindbridge verify                    # reuse the newest MLX-written day
+mindbridge verify --date 2026-08-08  # or name a T2 day card explicitly
 ```
+
+`--plan` exists because the full run loads a 3B model and starts two web
+servers; it prints which of the eight services are already in place and which it
+would have to bring up.
 
 The run refreshes that day's T2 narrative. It deliberately disables preference
 writes during extraction and uses an existing real T3 row as a read-only recall
 probe, so an acceptance test never becomes durable user memory. Services that
-were already running stay running; services started by the script are stopped
-on exit, and Postgres data is preserved.
+were already running stay running; services started by the run are stopped on
+exit, and Postgres data is preserved.
+
+Service logs now survive a failure. `scripts/verify-local-loop.sh` printed
+`see $TMP_DIR` from a handler that had already deleted that directory, so the
+one message you needed on a failed run pointed at nothing. The temp directory is
+kept when the run fails and removed when it passes. The script still works and
+still takes a bare date.
 
 ## Design
 

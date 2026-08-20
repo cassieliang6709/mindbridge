@@ -1,0 +1,43 @@
+# Packaging exists for one reason: so the MCP server and the nightly jobs have
+# a stable entry point that does not depend on a shell wrapper inside a
+# particular checkout. `pip install -e .` puts `mindbridge` and
+# `mindbridge-mcp` on the venv's PATH; an MCP client can then point at
+# .venv/bin/mindbridge-mcp instead of scripts/run-mcp.sh.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mindbridge"
+version = "0.1.0"
+description = "A reflective AI companion powered by a transparent temporal Memory Core."
+requires-python = ">=3.12"
+# Read from requirements.txt rather than duplicated here: the Docker image
+# installs that file, and two lists would drift.
+dynamic = ["dependencies"]
+
+[project.scripts]
+mindbridge = "cli.__main__:main"
+# A second entry point rather than asking clients to spell `mindbridge mcp`:
+# MCP client config is fiddly to edit, and a bare command with no arguments is
+# the shape every client documents.
+mindbridge-mcp = "cli.__main__:mcp_main"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools]
+# Listed explicitly. Auto-discovery walks the whole tree and would try to claim
+# node_modules, .next, backups and dist as packages.
+packages = [
+  "api",
+  "api.memory",
+  "cli",
+  "evals",
+  "extract",
+  "ingest",
+  "mcp_server",
+  "scripts",
+  "train",
+]

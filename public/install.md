@@ -46,6 +46,7 @@ values, not minimum requirements.
    test -f .env || cp .env.example .env
    test -d .venv || python3 -m venv .venv
    .venv/bin/pip install -r requirements.txt
+   .venv/bin/pip install -e .
    ollama pull nomic-embed-text
    docker compose up -d db redis
    ```
@@ -65,9 +66,8 @@ values, not minimum requirements.
 3. Register the local MCP server:
 
    ```bash
-   chmod +x scripts/run-mcp.sh scripts/install-codex-mcp.sh scripts/install-claude-mcp.sh
-   command -v codex >/dev/null && scripts/install-codex-mcp.sh
-   command -v claude >/dev/null && scripts/install-claude-mcp.sh
+   command -v codex >/dev/null && .venv/bin/mindbridge install codex
+   command -v claude >/dev/null && .venv/bin/mindbridge install claude
    command -v codex >/dev/null && codex mcp list
    command -v claude >/dev/null && claude mcp list
    ```

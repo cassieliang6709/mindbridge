@@ -54,6 +54,8 @@ __pycache__/
 venv/
 .pytest_cache/
 .ruff_cache/
+# build metadata from `pip install -e .`
+*.egg-info/
 
 # M2 training data: contains transcript excerpts from the local machine
 train/dataset/*.jsonl
