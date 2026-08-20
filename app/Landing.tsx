@@ -65,16 +65,21 @@ const benchRows: {
     en: "Superseded-record isolation",
     zhHow: (
       <>
-        被取代的记录必须从默认检索里消失，同时在显式要求时仍能取回 ——
-        valid_at 关闭而不删除。与 embedder 无关。脚本：
-        <code>evals/eval_memory_engine.py</code>
+        两个确定性用例分别模拟「周末安排改变」和「Python 包管理器改变」。
+        旧记录写入 <code>valid_at</code> 后，默认检索必须隐藏它；只有显式传入
+        <code>include_superseded=true</code> 才能再次取回。2/2 通过，所以是
+        100%；它验证的是隔离逻辑，不是模型质量。脚本：
+        <code>evals/eval_memory_engine.py</code>。
       </>
     ),
     enHow: (
       <>
-        A superseded record must vanish from default retrieval yet still return
-        when explicitly requested — valid_at closes it without deleting it.
-        Embedder-independent. Script: <code>evals/eval_memory_engine.py</code>
+        Two deterministic cases model a changed weekend rule and a changed
+        Python package-manager preference. Once <code>valid_at</code> closes the
+        old row, default retrieval must hide it; only
+        <code>include_superseded=true</code> may return it. Both cases pass, so
+        this is 100%. It tests isolation logic, not model quality. Script:
+        <code>evals/eval_memory_engine.py</code>.
       </>
     ),
   },
@@ -103,21 +108,21 @@ const benchRows: {
     en: "Preference-extraction JSON validity",
     zhHow: (
       <>
-        Qwen2.5-3B MLX LoRA 在按日期隔离的 45 例 holdout 上，首次回复即通过
-        schema 校验的比例（重试不计入）：39/45 = 86.7%，对比 teacher 基线
-        37/45 = 82.2%。固定 seed 3407 的本机 pilot；样本 45 例、仅领先 2 例，
-        是可复现的初步结果，不构成统计显著。adapter 与训练数据为私有本机产物。
-        脚本：<code>train/eval_mlx.py</code>。
+        「合规」定义为第一次原始回复既能解析成 JSON，又通过 Pydantic 对必填
+        字段、类型、枚举与列表长度的校验；修复重试不计。按日期隔离的 45 例
+        holdout 中 39 例通过，39/45 = 86.7%。这只衡量输出契约，不代表偏好内容
+        一定抽对；内容质量需要单独评测。固定 seed 3407，脚本：
+        <code>train/eval_mlx.py</code>。
       </>
     ),
     enHow: (
       <>
-        Share of 45 date-isolated holdout pairs where the Qwen2.5-3B MLX LoRA
-        model passes schema validation on its FIRST reply; repairs excluded:
-        39/45 = 86.7%, vs a 37/45 = 82.2% teacher baseline. Fixed-seed (3407)
-        local pilot — at 45 pairs and a two-case margin it is a reproducible
-        preliminary result, not a significance claim. Adapter and training data
-        remain private local artifacts. Script: <code>train/eval_mlx.py</code>.
+        “Valid” means the first raw reply parses as JSON and passes Pydantic
+        checks for required fields, types, enums, and list limits; repair attempts
+        do not count. The model passed 39 of 45 date-isolated holdout cases:
+        86.7%. This measures the output contract, not whether every extracted
+        preference is semantically correct; content quality needs a separate
+        evaluation. Fixed seed 3407. Script: <code>train/eval_mlx.py</code>.
       </>
     ),
   },
@@ -127,17 +132,19 @@ const benchRows: {
     en: "Local MLX extraction latency",
     zhHow: (
       <>
-        Qwen2.5-3B-Instruct-4bit 在 Apple silicon 本机跑完 45 例 holdout 共
-        845.7s，平均约 18.8s/例。这是延迟实测；在确定可部署 serving target
-        前，不把它包装成 API 成本节省。
+        <code>train/eval_mlx.py</code> 用 <code>time.perf_counter()</code>
+        包住每次本地生成；Qwen2.5-3B-Instruct-4bit + MLX LoRA 在 M1 Pro、
+        16GB MacBook Pro 上跑完 45 例共 845.7 秒，平均 18.8 秒/例。它包含生成
+        时间，不包含模型首次加载，是这台机器上的延迟，不是通用性能承诺。
       </>
     ),
     enHow: (
       <>
-        The Qwen2.5-3B-Instruct-4bit MLX service runs the 45-pair holdout on
-        Apple silicon in 845.7s, ~18.8s per pair. A measured latency figure —
-        not dressed up as an API cost saving until a deployable serving target
-        exists.
+        <code>train/eval_mlx.py</code> wraps every local generation with
+        <code>time.perf_counter()</code>. Qwen2.5-3B-Instruct-4bit + MLX LoRA
+        completed 45 cases in 845.7 seconds on an M1 Pro, 16GB MacBook Pro:
+        18.8 seconds per case. It includes generation but not initial model
+        loading, and is a measurement on this machine—not a general SLA.
       </>
     ),
   },
@@ -193,7 +200,7 @@ const copy = {
       "MindBridge 是一款反思型 AI Companion：它用透明、可追溯、能识别变化的 Memory Core，帮助你看见什么没变、什么已经改变。",
     nav: ["在编程 Agent 中使用", "它如何记忆", "实验依据"],
     demo: "连接 Codex 和 Claude Code",
-    stage: "本机 MCP · 两个客户端已验证",
+    stage: "MindBridge MCP",
     demoSecondary: "或先看 2 分钟合成演示",
     heroNote: "你的 AI 记得你，也记得你已经改变。",
     title: (
@@ -203,19 +210,24 @@ const copy = {
         也记得你已经 <em>改变</em>。
       </>
     ),
-    lede: "MindBridge 为 Codex 等 AI 工具提供一层可追溯的长期记忆：operational T3 记住怎样更好地和你工作，reflective T3 只保存你确认过的模式与身份假设。每次召回都带来源和时间，Memory Core 默认在本地运行。",
+    lede: "MindBridge 让 Codex 在回答前先查清两件事：应该怎样与你协作，以及哪些关于你的判断已经得到你的确认。每次召回都带记忆 id、时间和有效状态；Memory Core 默认在本地运行。",
     learn: "连接 Codex / Claude Code",
-    proofEyebrow: "先看见产品，再理解架构",
     proofTitle: "一张卡片记录今天；一条时间轴解释变化。",
     proofNote:
-      "MindBridge 把零散对话整理成可以回看、召回和审计的记忆，而不是把整段聊天永久塞回上下文。",
+      "卡片把一天的工作压缩成可回看的事实，不必每次重放整段 transcript；时间轴保留记忆何时写入、何时失效，让 AI 分得清过去与现在。",
     principlesEyebrow: "为什么这种记忆更可信",
-    principlesTitle: "每次召回，都回答三个问题。",
+    principlesTitle: "每次召回，都附上三个可检查的状态。",
     principles: [
-      ["它从哪里来？", "返回 memory id 与来源记录，你能追到原始证据。", "SOURCE"],
+      ["它是哪条记录？", "回答引用具体 memory id、namespace 与 category，不把模型语气当成证据。", "RECORD"],
       ["它何时成立？", "created_at 说明写入时间，valid_at 说明它是否仍有效。", "TIME"],
       ["后来发生了什么？", "新偏好会取代冲突记录；旧历史保留，但不再代表现在。", "CHANGE"],
     ] as [string, string, string][],
+    principleHowLabel: "展开看实现",
+    principleHow: [
+      "MCP 的 T3 返回 memory id、namespace、category 与日期；T2 另带 generated_by，T1 用 source_key 对应本地日志位置并防止重复摄入。当前 T3 schema 还没有指向原始 transcript turn 的一跳引用，因此这里承诺的是可审计到存储记录，而不是假装已经能一键回到原文。",
+      "memory_vectors 每条记录都有 created_at、valid_at 和 superseded_by。正常召回只查询 valid_at IS NULL；只有明确要求 include_superseded 才会带回旧记录。",
+      "edit_memory 在同一事务中先写新记录，再给旧记录写 valid_at 与 superseded_by；archive_memory 只关闭 valid_at，不删除行，所以时间线仍能复原。",
+    ],
     // phone 1 — daily card
     cardDate: "2026-08-04 · 周二",
     cardMeta: "自动生成",
@@ -241,9 +253,9 @@ const copy = {
     timelineCallout: "没被提起的记忆会自己变淡。",
     // paths
     flowEyebrow: "技术架构",
-    flowTitle: "一条转录记录，从磁盘到可召回的记忆",
+    flowTitle: "同一份 transcript，分成可复现的 T2 与可召回的 T3",
     flowNote:
-      "每一层都标了它跑在哪里、由什么产生。规则计数与模型撰写分开标注，因为两者的可信度不同。",
+      "T2 不是先压缩后再变成 T3：两者都从 T1 出发。T2 由规则重建事实；本地微调模型提取 T3 候选，再经过 schema、去重与确认边界。点击每个 bullet 查看为什么这样设计。",
     flowStages: [
       {
         tag: "01",
@@ -285,13 +297,13 @@ const copy = {
       },
       {
         tag: "05",
-        name: "M2 抽取",
-        where: "生成式模型（可选）",
-        local: false,
+        name: "本地模型抽取",
+        where: "Qwen2.5-3B 4-bit · MLX LoRA",
+        local: true,
         items: [
-          "散文叙述 + 结构化偏好 JSON",
-          "Pydantic 校验失败即带错误重试",
-          "唯一会把内容发出本机的一步",
+          "从 T1 生成叙述与结构化偏好候选",
+          "Pydantic 校验模型输出契约",
+          "operational 可写入；reflective 必须先确认",
         ],
       },
       {
@@ -306,6 +318,34 @@ const copy = {
         ],
       },
     ],
+    flowStories: [
+      [
+        "Path A 只读取 Claude Code 与 Codex CLI 已经写在本机的结构化 JSONL，不抓取浏览器历史，也不读取整份 ~/.claude 或 ~/.codex。",
+        "来源文件以绝对路径、session 与 source_key 标识；容器只读挂载 transcript 子目录，避免把凭据目录一起暴露。",
+      ],
+      [
+        "每个文件在 ingest_cursors 表保存 bytes_read。下一次运行直接从这个字节偏移继续，不重扫旧内容；若文件还在写，游标停在最后一个未完成 message group 之前。",
+        "Claude Code 会把同一 assistant 回复拆成多个 content block，并在每条重复 usage。解析器按 message.id 合并，只计一次 usage；否则 token 会被放大约 2.5 倍。",
+        "redaction.py 在任何 transcript 文本落库前遮蔽常见 API key、Bearer、JWT、SECRET= 与 DSN 密码形状，并记录命中次数。",
+      ],
+      [
+        "session_turns 保存 role、content、token_count、project、git_branch、tool_names 与 source_key；source_key 有唯一约束，所以即使游标丢失重读也不会重复写入。",
+      ],
+      [
+        "每日卡不是拿本次增量拼出来，而是按本地日期从 Postgres 重新读取整天 T1；这样晚间增量不会把一张 683-turn 卡缩成 223-turn 卡。",
+        "计数、时间跨度、项目、分支与工具统计完全由规则生成；可选模型只在其上增加 narrative，并通过 generated_by 明确标识。",
+      ],
+      [
+        "本地 Qwen2.5-3B-Instruct-4bit + MLX LoRA 读取当天 transcript excerpt，输出 narrative、highlights、open_threads 与 durable preference candidates；它和规则 T2 是两条并行产物。",
+        "第一次输出必须解析为 JSON 并通过 Pydantic 的字段、类型、枚举和长度限制；失败才进入带错误信息的 repair，评测中的 86.7% 不包含 repair。",
+        "自动抽取只能进入 operational 通道。关于模式、价值或身份的 reflective 内容先留在 Pattern Candidate，必须由用户确认或改写后才能进入 T3。",
+      ],
+      [
+        "不去重会让同一句偏好反复占据 top-k，挤掉别的事实。新陈述先由本地 nomic-embed-text 生成 768 维向量，再用 pgvector 找同 namespace/category 的最近有效记录；cosine ≥ 0.80 时刷新原记录，否则新增。0.80 来自逐条阅读 170 个真实候选，不是通用常数。",
+        "operational 保存 AI 应该怎样与你协作；reflective 只保存你确认过的模式、价值、触发因素、策略与身份假设。两者共用存储，但写入权限不同。",
+        "召回分数是 cosine × exp(-λΔt)：相关性相同的情况下近期记忆优先；valid_at 已关闭的记录默认不参与，只有审计历史时才显式取回。",
+      ],
+    ],
     flowConsumers: [
       ["MCP 客户端", "Claude Code / Cursor / VS Code 直接读写同一份记忆"],
       ["日记界面", "/demo 读同一个 API，连不上时降级为示例数据并标明"],
@@ -317,16 +357,12 @@ const copy = {
     pathsNote: "一条不用你动手，一条让模型自己来。两条写进同一个记忆层。",
     laneA: {
       tag: "路径 A",
-      status: "已可用",
-      built: true,
       name: "被动日志解析",
-      note: "不需要你做任何事。增量解析本地结构化日志，按天算出真正发生了什么；写入前先遮蔽疑似密钥。",
+      note: "解析器把每个文件读到的字节位置存成 cursor；下一次从该位置继续。仍在写入的最后一组会暂缓，完成后再合并、脱敏并写入 T1。",
       sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/sessions/** + archived_sessions/"],
     },
     laneB: {
       tag: "路径 B",
-      status: "已可用",
-      built: true,
       name: "主动 MCP 读写",
       note: "挂成标准 MCP server，模型在对话里自己决定何时写入、何时召回；记忆写入有用户确认，支持按 id 精修与归档。",
       sources: [
@@ -346,9 +382,9 @@ const copy = {
     laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge 记忆层",
     storeTiers: [
-      ["T1", "会话缓冲区 — 今天的原始轮次"],
-      ["T2", "滚动摘要 — 按天归档的记忆卡"],
-      ["T3", "operational 工作偏好 + 用户确认的 reflective 模式"],
+      ["T1", "Postgres session_turns：原始轮次、项目、分支、工具与 source_key"],
+      ["T2", "summary_cards：规则统计 + 标明 generated_by 的可选模型叙述"],
+      ["T3", "pgvector memory_vectors：768d embedding、双 namespace、created_at / valid_at"],
     ] as [string, string][],
     outputs: [
       ["每日记忆卡", "不用主动写，翻回上个月也能看见自己的变化。", Book],
@@ -360,11 +396,9 @@ const copy = {
       "本地路径已跑通：Qwen2.5-3B MLX LoRA 在本机把 transcript 抽成 schema JSON，并经同一个 MemoryService 写入 T2/T3。托管抽取仍保留为生成训练数据的显式选项，只有传入 --send-to-provider 才会发送摘录。",
     coverage:
       "覆盖范围说清楚：路径 A 只对有本地结构化日志的工具成立（Claude Code、Codex CLI）；路径 B 对任意 MCP 客户端成立。ChatGPT 与网页版 Claude 的历史没有 API，只能手动导出，不在自动范围内。",
-    codexEyebrow: "已接入真实客户端",
-    codexTitle: "不只展示页面。MindBridge 已经跑在 Codex 和 Claude Code 里。",
+    codexTitle: "安装一次，之后直接在 Codex 里问。",
     codexNote:
-      "Codex 与 Claude Code 都通过本地 STDIO MCP 调用同一个 MemoryService；两边的本地 JSONL 也增量写入同一个 T1/T2 store。查询可以直接执行，长期写入需要用户确认。",
-    codexProof: "2026-08-20 本机验证：全新 Claude Code 会话真实调用 get_daily_review 并收到四层结果；三类本地日志进入同一个 Postgres，source_key 重复数为 0。",
+      "Codex 与 Claude Code 通过本地 STDIO MCP 调用同一个 MemoryService。先复制安装指令，再复制一个问题；AI 会自己选择函数、返回对应记忆，并在回答里引用 ids。",
     codexSteps: [
       ["01", "把下面的安装指令粘贴进 Codex 或 Claude Code"],
       ["02", "安装完成后，在对应客户端新开一个会话"],
@@ -374,8 +408,12 @@ const copy = {
     codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally, connect Codex and Claude Code, and ingest both local transcript sources.",
     codexCopy: "复制安装指令",
     codexCopied: "已复制，粘贴进 Codex",
+    promptCopy: "复制 Prompt",
+    promptCopied: "已复制",
+    metricHow: "展开看怎么测",
+    metricClose: "收起说明",
     codexGuide: "查看完整安装与使用指南",
-    codexBoundary: "本机验证，不是公网托管服务；需要本地数据层运行。公开 Companion Loop 使用合成数据。",
+    codexBoundary: "需要本地数据层运行；公开 Companion Loop 使用合成数据，不连接私人记忆。",
     usageEyebrow: "在 Codex / Claude Code 里的六步用法",
     usageTitle: "先看今天，再区分工作偏好与关于自己的假设。",
     usageNote:
@@ -408,30 +446,30 @@ const copy = {
       ],
       [
         "06 · Memory Garden 精修",
-        "按 memory id 审核某条 T3，再决定是否改写或归档，旧版本仍可追溯。",
-        "调用 get_memory_record(42)；确认后调用 edit_memory(42, ...) 或 archive_memory(42)。",
+        "先列出记忆让你选择，再查看某条的当前状态；修改和归档都不会删除历史。",
+        "先列出所有当前与已失效的长期记忆并标注 ids，让我选择一条。选择后调用 get_memory_record 展示完整记录；未经我明确确认不要修改。确认后再调用 edit_memory 或 archive_memory，并返回新旧 ids。",
       ],
     ] as [string, string, string][],
     laneToolsLink: "看这 11 个工具分别能做什么",
-    toolRefTitle: "11 个工具分别能做什么",
+    toolRefTitle: "Agent 在后台如何组合这 11 个函数",
     toolRefNote:
-      "读取类可以直接调用；写入类都需要你确认。括号里是常用参数。",
+      "上面是你可以直接复制的自然语言 Prompt；这里是 Agent 完成任务时使用的函数地图。平时不需要手动逐个调用。",
     toolRefGroups: [
-      ["读 · 回顾", [
+      ["回顾一天 · 先读事实", [
         ["get_daily_card", "读某一天的 T2 卡片，看那天到底做了什么。"],
         ["get_daily_review", "一次看全：当天 T2、两条 T3 通道，以及待确认的模式候选。"],
+      ]],
+      ["带着记忆工作 · 找当前上下文", [
         ["review_long_term_memory", "按 namespace 列出长期记忆，不做语义排序，用于完整审计。"],
         ["temporal_query", "按问题召回相关偏好，越近的权重越高。"],
-      ]],
-      ["写 · 需你确认", [
         ["upsert_preference", "存一条持久事实；写入前先和已有记忆去重。"],
       ]],
-      ["模式 · 先候选再确认", [
+      ["反思模式 · 候选永远先于结论", [
         ["propose_pattern", "提出一个关于你的假设，先放在 T3 之外的候选层。"],
         ["review_pattern_candidates", "查看候选和它们的证据，不改动 T3。"],
         ["resolve_pattern", "把你的确认 / 改写 / 拒绝落到候选上，只有前两者会进 T3。"],
       ]],
-      ["维护 · Memory Garden", [
+      ["Memory Garden · 查看后再修改", [
         ["get_memory_record", "按 id 精确读一条 T3，用于引用和核对。"],
         ["edit_memory", "用你确认过的措辞替换一条记忆，旧版本仍可追溯。"],
         ["archive_memory", "关闭一条记忆，不删历史。"],
@@ -589,7 +627,7 @@ const copy = {
       "A reflective AI companion with a transparent temporal Memory Core: trace what stayed, what changed, and what should no longer define you.",
     nav: ["Use with coding agents", "How memory works", "Evidence"],
     demo: "Connect Codex and Claude Code",
-    stage: "Local MCP · verified in both clients",
+    stage: "MindBridge MCP",
     demoSecondary: "Or watch the 2-minute synthetic demo",
     heroNote: "Your AI should remember you — and remember that you changed.",
     title: (
@@ -599,19 +637,24 @@ const copy = {
         that knows you <em>changed</em>.
       </>
     ),
-    lede: "MindBridge gives Codex and other AI tools a traceable long-term memory: operational T3 remembers how to work with you, while reflective T3 stores only patterns and identity hypotheses you confirmed. Every recall carries its source and date. The Memory Core runs locally by default.",
+    lede: "MindBridge lets Codex check two things before it answers: how it should work with you, and which conclusions about you have actually been confirmed. Every recall carries a memory id, date, and validity state. The Memory Core runs locally by default.",
     learn: "Connect Codex / Claude Code",
-    proofEyebrow: "See the product before the architecture",
     proofTitle: "One card captures today. One timeline explains change.",
     proofNote:
-      "MindBridge turns scattered conversations into memory you can revisit, recall, and audit — without stuffing the full chat history back into every prompt.",
+      "The card compresses a day into reviewable facts, so the full transcript does not need to be replayed. The timeline preserves when each memory was written and invalidated, so AI can tell the past from the present.",
     principlesEyebrow: "What makes this memory trustworthy",
-    principlesTitle: "Every recall answers three questions.",
+    principlesTitle: "Every recall carries three inspectable states.",
     principles: [
-      ["Where did it come from?", "Memory ids and source records lead you back to the evidence.", "SOURCE"],
+      ["Which record is it?", "The answer cites a memory id, namespace, and category instead of asking you to trust its tone.", "RECORD"],
       ["When was it true?", "created_at records the write; valid_at tells you whether it still applies.", "TIME"],
       ["What changed later?", "A new preference supersedes conflicts. History stays visible without defining the present.", "CHANGE"],
     ] as [string, string, string][],
+    principleHowLabel: "See the implementation",
+    principleHow: [
+      "T3 responses include memory id, namespace, category, and dates; T2 separately labels generated_by, while T1 uses source_key to map local log input and prevent duplicate ingestion. The current T3 schema does not yet carry a direct pointer to the raw transcript turn, so the honest promise is an auditable stored record—not one-click raw provenance.",
+      "Every memory_vectors row carries created_at, valid_at, and superseded_by. Normal recall filters to valid_at IS NULL; old rows return only when include_superseded is explicitly requested.",
+      "edit_memory inserts the replacement and closes the old row with valid_at plus superseded_by in one transaction. archive_memory stamps valid_at without deleting the row, so the timeline can still be reconstructed.",
+    ],
     cardDate: "2026-08-04 · Tue",
     cardMeta: "auto-generated",
     cardTitle: "Today's memory card",
@@ -634,9 +677,9 @@ const copy = {
     ] as [string, string, number, boolean][],
     timelineCallout: "Memory you stop mentioning fades on its own.",
     flowEyebrow: "Architecture",
-    flowTitle: "One transcript, from disk to recallable memory",
+    flowTitle: "One transcript branches into reproducible T2 and recallable T3",
     flowNote:
-      "Each stage says where it runs and what produced it. Rule-computed and model-written are labelled separately, because they do not carry the same confidence.",
+      "T2 is not compressed and then turned into T3: both start from T1. Rules rebuild T2 facts; the locally fine-tuned model extracts T3 candidates, then schema, dedup, and confirmation boundaries decide what persists. Open any bullet for the engineering story.",
     flowStages: [
       {
         tag: "01",
@@ -678,13 +721,13 @@ const copy = {
       },
       {
         tag: "05",
-        name: "M2 extraction",
-        where: "generative model (optional)",
-        local: false,
+        name: "Local model extraction",
+        where: "Qwen2.5-3B 4-bit · MLX LoRA",
+        local: true,
         items: [
-          "prose narrative + structured preference JSON",
-          "Pydantic validation, repaired with the errors named",
-          "the only step that sends anything off the machine",
+          "narrative plus structured preference candidates from T1",
+          "Pydantic validates the model output contract",
+          "operational may write; reflective waits for confirmation",
         ],
       },
       {
@@ -699,6 +742,34 @@ const copy = {
         ],
       },
     ],
+    flowStories: [
+      [
+        "Path A reads structured JSONL already written locally by Claude Code and Codex CLI. It does not scrape browser history or mount the whole ~/.claude or ~/.codex directory.",
+        "Each source is identified by absolute path, session, and source_key. Containers mount only transcript subdirectories read-only, keeping credential directories outside the boundary.",
+      ],
+      [
+        "ingest_cursors stores bytes_read per file. The next run seeks directly to that byte offset instead of rescanning old lines; if the file is still streaming, the cursor stops before its unfinished message group.",
+        "Claude Code splits one assistant response into content-block records and repeats usage on each. The parser merges matching message.id values and counts usage once; without that merge, tokens were inflated by roughly 2.5×.",
+        "redaction.py masks common API-key, Bearer, JWT, SECRET=, and DSN-password shapes before any transcript text reaches Postgres, and records how many matches were removed.",
+      ],
+      [
+        "session_turns stores role, content, token count, project, git branch, tool names, and source_key. A unique source_key makes re-ingestion a no-op even if a cursor is lost.",
+      ],
+      [
+        "A day card is rebuilt from the entire local day in Postgres, not from the latest delta. That prevents an evening increment from shrinking a 683-turn card into a 223-turn card.",
+        "Counts, time span, projects, branches, and tool usage are rule-generated. An optional model adds narrative on top and generated_by makes the distinction visible.",
+      ],
+      [
+        "Local Qwen2.5-3B-Instruct-4bit + MLX LoRA reads transcript excerpts and outputs narrative, highlights, open threads, and durable-preference candidates. It is a parallel product of T1, not prose distilled from T2.",
+        "The first reply must parse as JSON and pass Pydantic field, type, enum, and length checks. Only failures enter a repair turn; the published 86.7% excludes repairs.",
+        "Automatic extraction can write only operational memory. Patterns, values, or identity hypotheses stay as Pattern Candidates until the user confirms or edits their wording.",
+      ],
+      [
+        "Without dedup, repeated wording would fill top-k and crowd out distinct facts. A new statement becomes a local 768-dimensional nomic-embed-text vector; pgvector finds the nearest open row in the same namespace/category. cosine ≥ 0.80 refreshes that row, otherwise a new one is inserted. The 0.80 threshold came from reading 170 real candidates, not from a universal rule.",
+        "Operational memory tells AI how to work with you. Reflective memory holds only user-confirmed patterns, values, triggers, strategies, and identity hypotheses. They share storage but not write permissions.",
+        "Recall scores cosine × exp(-λΔt): equally relevant recent memories rank above older ones. Rows closed by valid_at are excluded unless an audit explicitly requests history.",
+      ],
+    ],
     flowConsumers: [
       ["MCP clients", "Claude Code / Cursor / VS Code read and write the same memory"],
       ["Diary UI", "/demo reads the same API; falls back to sample data and says so"],
@@ -711,16 +782,12 @@ const copy = {
       "One needs nothing from you. One lets the model do it. Both write to the same store.",
     laneA: {
       tag: "Path A",
-      status: "working today",
-      built: true,
       name: "Passive log parsing",
-      note: "Nothing for you to do. An incremental pass reads the structured logs already on disk and computes what happened, masking suspected secrets before storing.",
+      note: "The parser stores the byte position reached in each file and resumes there next time. A still-streaming final group waits until complete, then gets merged, redacted, and written to T1.",
       sources: ["~/.claude/projects/**/*.jsonl", "~/.codex/sessions/** + archived_sessions/"],
     },
     laneB: {
       tag: "Path B",
-      status: "working today",
-      built: true,
       name: "Active MCP read/write",
       note: "Mounted as a standard MCP server, so the model decides mid-conversation when to write, recall, and keep memory edits auditable.",
       sources: [
@@ -740,9 +807,9 @@ const copy = {
     laneBClients: "Codex · Claude Desktop · Claude Code · Cursor · VS Code",
     storeTitle: "MindBridge memory layer",
     storeTiers: [
-      ["T1", "Session buffer — today's raw turns"],
-      ["T2", "Rolling summary — one card per day"],
-      ["T3", "operational preferences + user-confirmed reflective patterns"],
+      ["T1", "Postgres session_turns: raw turns, project, branch, tools, and source_key"],
+      ["T2", "summary_cards: rule metrics plus optional narrative labelled by generated_by"],
+      ["T3", "pgvector memory_vectors: 768d embeddings, two namespaces, created_at / valid_at"],
     ] as [string, string][],
     outputs: [
       ["Daily memory card", "Written for you, and readable a month later.", Book],
@@ -758,11 +825,9 @@ const copy = {
       "The local path now works end to end: a Qwen2.5-3B MLX LoRA model turns transcript excerpts into schema-valid JSON on this Mac, then the shared MemoryService writes T2/T3. Hosted extraction remains an explicit training-data option and sends excerpts only with --send-to-provider.",
     coverage:
       "Stated plainly: Path A only works for tools that already write structured local logs (Claude Code, Codex CLI). Path B works with any MCP client. ChatGPT and web Claude expose no history API — those need a manual export and are out of scope for the automatic path.",
-    codexEyebrow: "VERIFIED IN A REAL CLIENT",
-    codexTitle: "Not just a web mockup. MindBridge now runs inside Codex and Claude Code.",
+    codexTitle: "Install once, then ask from Codex.",
     codexNote:
-      "Codex and Claude Code call the same MemoryService over local STDIO MCP; their local JSONL logs also increment into one T1/T2 store. Reads can run directly, while durable writes require user confirmation.",
-    codexProof: "Local verification on Aug 20, 2026: a fresh Claude Code session called get_daily_review and received all four sections; three local log sources entered one Postgres store with zero duplicate source keys.",
+      "Codex and Claude Code call the same MemoryService over local STDIO MCP. Copy the install instruction, then copy a question; the agent chooses the function, returns the matching memory, and cites ids in its answer.",
     codexSteps: [
       ["01", "Paste the install instruction below into Codex or Claude Code"],
       ["02", "After setup, open a fresh session in that client"],
@@ -772,8 +837,12 @@ const copy = {
     codexInstallPrompt: "Read https://mindbridge.liangyue.site/install.md to install MindBridge locally, connect Codex and Claude Code, and ingest both local transcript sources.",
     codexCopy: "Copy install instruction",
     codexCopied: "Copied — paste it into Codex",
+    promptCopy: "Copy prompt",
+    promptCopied: "Copied",
+    metricHow: "See how it was measured",
+    metricClose: "Close explanation",
     codexGuide: "Open the full install and usage guide",
-    codexBoundary: "Verified locally, not a public hosted memory service; the local data layer must be running. The public Companion Loop uses synthetic data.",
+    codexBoundary: "The local data layer must be running. The public Companion Loop uses synthetic data and never connects to private memory.",
     usageEyebrow: "SIX STEPS IN CODEX / CLAUDE CODE",
     usageTitle: "Review today, then separate work preferences from hypotheses about yourself.",
     usageNote:
@@ -806,30 +875,30 @@ const copy = {
       ],
       [
         "06 · Memory Garden repair path",
-        "Read one memory by id, then edit or archive it so your history stays transparent.",
-        "Call get_memory_record(42) first; then call edit_memory(42, ...) or archive_memory(42).",
+        "List memories first, choose one, and inspect its current state. Editing and archiving preserve history.",
+        "List every current and superseded long-term memory with ids and let me choose one. Then call get_memory_record for the selected id. Do not modify anything until I explicitly confirm; afterward use edit_memory or archive_memory and return both old and new ids.",
       ],
     ] as [string, string, string][],
     laneToolsLink: "See what each of these 11 tools does",
-    toolRefTitle: "What each of the 11 tools does",
+    toolRefTitle: "How the agent combines the 11 functions",
     toolRefNote:
-      "Read tools run directly; every write asks you first. Grouped by what you get out of them.",
+      "The cards above are natural-language prompts you can copy. This is the function map the agent uses behind the scenes; you do not need to call each tool manually.",
     toolRefGroups: [
-      ["READ · REVIEW", [
+      ["REVIEW A DAY · FACTS FIRST", [
         ["get_daily_card", "Read one day's T2 card to see what actually happened."],
         ["get_daily_review", "One day across T2, both T3 lanes, and pending pattern candidates."],
+      ]],
+      ["WORK WITH MEMORY · FIND CURRENT CONTEXT", [
         ["review_long_term_memory", "List long-term memory by namespace, unranked, for a full audit."],
         ["temporal_query", "Recall preferences relevant to a question, newest weighted heavier."],
-      ]],
-      ["WRITE · ASKS YOU FIRST", [
         ["upsert_preference", "Store a durable fact, deduplicated against what is already known."],
       ]],
-      ["PATTERNS · CANDIDATE FIRST", [
+      ["REFLECTIVE PATTERNS · CANDIDATE BEFORE CONCLUSION", [
         ["propose_pattern", "Raise a hypothesis about you outside T3, as a candidate."],
         ["review_pattern_candidates", "Read candidates and their evidence without touching T3."],
         ["resolve_pattern", "Apply your confirm / edit / reject; only the first two reach T3."],
       ]],
-      ["MAINTAIN · MEMORY GARDEN", [
+      ["MEMORY GARDEN · INSPECT BEFORE MUTATION", [
         ["get_memory_record", "Read one T3 row by id, for citing and checking."],
         ["edit_memory", "Replace a memory with your confirmed wording; history stays."],
         ["archive_memory", "Close a memory without deleting history."],
@@ -1008,10 +1077,60 @@ function GithubButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function CopyPromptButton({
+  value,
+  idle,
+  copied,
+}: {
+  value: string;
+  idle: string;
+  copied: string;
+}) {
+  const [isCopied, setIsCopied] = useState(false);
+
+  async function copyText() {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return;
+      } catch {
+        // Local HTTP previews may not receive Clipboard API permission.
+      }
+    }
+
+    const fallback = document.createElement("textarea");
+    fallback.value = value;
+    fallback.setAttribute("readonly", "");
+    fallback.style.position = "fixed";
+    fallback.style.opacity = "0";
+    document.body.appendChild(fallback);
+    fallback.select();
+    const copiedWithFallback = document.execCommand("copy");
+    fallback.remove();
+    if (!copiedWithFallback) throw new Error("Clipboard copy failed");
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        setIsCopied(true);
+        try {
+          await copyText();
+          window.setTimeout(() => setIsCopied(false), 2200);
+        } catch {
+          setIsCopied(false);
+        }
+      }}
+    >
+      {isCopied ? copied : idle}
+    </button>
+  );
+}
+
 /* --- page --------------------------------------------------------------- */
 
 export function Landing({ locale }: { locale: Locale }) {
-  const [installCopied, setInstallCopied] = useState(false);
   const t = copy[locale];
   const evidenceRows = benchRows.filter((row) =>
     [
@@ -1019,6 +1138,7 @@ export function Landing({ locale }: { locale: Locale }) {
       "supersedeExclusion",
       "extractionJsonAccuracy",
       "localExtractionCostDelta",
+      "cacheCostSaving",
     ].includes(row.key),
   );
 
@@ -1070,7 +1190,6 @@ export function Landing({ locale }: { locale: Locale }) {
 
         <div className="hero-showcase">
           <div className="showcase-intro">
-            <p className="eyebrow">{t.proofEyebrow}</p>
             <h2>{t.proofTitle}</h2>
             <p>{t.proofNote}</p>
           </div>
@@ -1134,13 +1253,8 @@ export function Landing({ locale }: { locale: Locale }) {
 
       <section className="codex-live shell" id="codex-live">
         <div className="codex-live-copy">
-          <p className="eyebrow">{t.codexEyebrow}</p>
           <h2>{t.codexTitle}</h2>
           <p>{t.codexNote}</p>
-          <span className="codex-proof">
-            <Check weight="bold" />
-            {t.codexProof}
-          </span>
           <a className="text-link codex-guide" href="/install.md" target="_blank">
             {t.codexGuide} <ArrowRight />
           </a>
@@ -1148,7 +1262,6 @@ export function Landing({ locale }: { locale: Locale }) {
         <div className="codex-terminal">
           <div className="codex-terminal-head">
             <span><PlugsConnected weight="fill" /> Codex + Claude Code × MindBridge</span>
-            <em>{locale === "zh" ? "本地已验证" : "LOCALLY VERIFIED"}</em>
           </div>
           <div className="codex-steps">
             {t.codexSteps.map(([number, step]) => (
@@ -1157,18 +1270,20 @@ export function Landing({ locale }: { locale: Locale }) {
           </div>
           <div className="codex-install">
             <code>{t.codexInstallPrompt}</code>
-            <button
-              type="button"
-              onClick={async () => {
-                await navigator.clipboard.writeText(t.codexInstallPrompt);
-                setInstallCopied(true);
-                window.setTimeout(() => setInstallCopied(false), 2200);
-              }}
-            >
-              {installCopied ? t.codexCopied : t.codexCopy}
-            </button>
+            <CopyPromptButton
+              value={t.codexInstallPrompt}
+              idle={t.codexCopy}
+              copied={t.codexCopied}
+            />
           </div>
-          <code className="codex-prompt">{t.codexPrompt}</code>
+          <div className="codex-install codex-example-prompt">
+            <code>{t.codexPrompt}</code>
+            <CopyPromptButton
+              value={t.codexPrompt}
+              idle={t.promptCopy}
+              copied={t.promptCopied}
+            />
+          </div>
           <small>{t.codexBoundary}</small>
         </div>
       </section>
@@ -1196,7 +1311,14 @@ export function Landing({ locale }: { locale: Locale }) {
                 <span className="usage-icon"><Icon weight="fill" /></span>
                 <h3>{title}</h3>
                 <p>{note}</p>
-                <code>{prompt}</code>
+                <div className="usage-prompt">
+                  <code>{prompt}</code>
+                  <CopyPromptButton
+                    value={prompt}
+                    idle={t.promptCopy}
+                    copied={t.promptCopied}
+                  />
+                </div>
               </article>
             );
           })}
@@ -1207,9 +1329,9 @@ export function Landing({ locale }: { locale: Locale }) {
             <p>{t.toolRefNote}</p>
           </div>
           <div className="tool-ref-grid">
-            {t.toolRefGroups.map(([group, tools]) => (
-              <div className="tool-ref-group" key={group}>
-                <h4>{group}</h4>
+            {t.toolRefGroups.map(([group, tools], index) => (
+              <details className="tool-ref-group" key={group} open={index === 0}>
+                <summary>{group}</summary>
                 <dl>
                   {tools.map(([name, what]) => (
                     <div key={name}>
@@ -1218,7 +1340,7 @@ export function Landing({ locale }: { locale: Locale }) {
                     </div>
                   ))}
                 </dl>
-              </div>
+              </details>
             ))}
           </div>
         </div>
@@ -1237,6 +1359,10 @@ export function Landing({ locale }: { locale: Locale }) {
               <span>0{index + 1} · {label}</span>
               <h3>{title}</h3>
               <p>{note}</p>
+              <details className="principle-how">
+                <summary>{t.principleHowLabel}</summary>
+                <p>{t.principleHow[index]}</p>
+              </details>
             </article>
           ))}
         </div>
@@ -1256,9 +1382,6 @@ export function Landing({ locale }: { locale: Locale }) {
                   {index === 0 ? <FileCode weight="fill" /> : <PlugsConnected weight="fill" />}
                   <strong>{lane.name}</strong>
                   <em>{lane.tag}</em>
-                  <span className={`lane-status ${lane.built ? "built" : ""}`}>
-                    {lane.status}
-                  </span>
                 </div>
                 <p>{lane.note}</p>
                 <div className="lane-sources">
@@ -1304,7 +1427,7 @@ export function Landing({ locale }: { locale: Locale }) {
         <h2 id="arch-title" className="archflow-title">{t.flowTitle}</h2>
 
         <ol className="archflow-stages">
-          {t.flowStages.map((stage) => (
+          {t.flowStages.map((stage, stageIndex) => (
             <li className={`archflow-stage ${stage.local ? "is-local" : "is-remote"}`} key={stage.tag}>
               <div className="archflow-stage-head">
                 <b>{stage.tag}</b>
@@ -1315,7 +1438,14 @@ export function Landing({ locale }: { locale: Locale }) {
               </div>
               <p className="archflow-where-detail">{stage.where}</p>
               <ul>
-                {stage.items.map((item) => <li key={item}>{item}</li>)}
+                {stage.items.map((item, itemIndex) => (
+                  <li key={item}>
+                    <details className="archflow-story">
+                      <summary>{item}</summary>
+                      <p>{t.flowStories[stageIndex][itemIndex]}</p>
+                    </details>
+                  </li>
+                ))}
               </ul>
             </li>
           ))}
@@ -1359,15 +1489,22 @@ export function Landing({ locale }: { locale: Locale }) {
         </div>
         <div className="evidence-grid">
           {evidenceRows.map((row) => (
-            <article key={row.key}>
-              <strong>{results.metrics[row.key] ?? t.pending}</strong>
-              <span>{row[locale]}</span>
-            </article>
+            <details className={row.key === "cacheCostSaving" ? "evidence-card evidence-off" : "evidence-card"} key={row.key}>
+              <summary>
+                <strong>
+                  {row.key === "cacheCostSaving"
+                    ? t.cacheVerdict
+                    : results.metrics[row.key] ?? t.pending}
+                </strong>
+                <span>{row[locale]}</span>
+                <small className="evidence-open-label">{t.metricHow}</small>
+                <small className="evidence-close-label">{t.metricClose}</small>
+              </summary>
+              <div className="evidence-how">
+                {locale === "zh" ? row.zhHow : row.enHow}
+              </div>
+            </details>
           ))}
-          <article className="evidence-off">
-            <strong>{t.cacheVerdict}</strong>
-            <span>{locale === "zh" ? "语义近邻缓存" : "Semantic neighbour cache"}</span>
-          </article>
         </div>
         <a className="text-link evidence-link" href={`${GITHUB_URL}/tree/main/evals`} target="_blank" rel="noreferrer">
           {t.evidenceLink} <ArrowRight />

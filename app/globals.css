@@ -248,7 +248,7 @@ nav a:hover,
 }
 
 .showcase-intro h2 {
-  margin: 8px 0 7px;
+  margin: 0 0 9px;
   font-size: clamp(24px, 2.2vw, 34px);
   line-height: 1.05;
   letter-spacing: -0.045em;
@@ -855,6 +855,12 @@ h3 {
   border-color: #6cb1ff;
 }
 
+.codex-example-prompt {
+  margin-bottom: 0;
+  border-color: rgba(111, 174, 255, 0.18);
+  background: rgba(70, 132, 211, 0.08);
+}
+
 .codex-terminal small {
   display: block;
   margin-top: 12px;
@@ -901,7 +907,7 @@ h3 {
 
 .usage-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-top: 22px;
 }
@@ -946,15 +952,38 @@ h3 {
   line-height: 1.45;
 }
 
-.usage-card code {
-  display: block;
+.usage-prompt {
+  display: grid;
+  gap: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(145, 190, 255, 0.12);
+}
+
+.usage-prompt code {
+  display: block;
   color: #b9dbff;
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.usage-prompt button {
+  width: max-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(114, 181, 255, 0.28);
+  border-radius: 8px;
+  color: #a8d2ff;
+  background: rgba(30, 106, 202, 0.14);
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.usage-prompt button:hover,
+.usage-prompt button:focus-visible {
+  color: #fff;
+  border-color: #6cb1ff;
 }
 
 /* --- narrative sections ------------------------------------------------ */
@@ -1039,6 +1068,26 @@ h3 {
   line-height: 1.55;
 }
 
+.principle-how {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(145, 190, 255, 0.14);
+}
+
+.principle-how summary {
+  width: max-content;
+  color: #8fc3ff;
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.principle-how p {
+  margin-top: 11px;
+  color: #c3d3e8;
+  font-size: 11px;
+}
+
 .path-notes {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
@@ -1106,7 +1155,7 @@ h3 {
 
 .evidence-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   margin-top: 25px;
   overflow: hidden;
@@ -1115,12 +1164,42 @@ h3 {
   background: #c7d7ec;
 }
 
-.evidence-grid article {
+.evidence-card {
+  display: grid;
+  min-height: 124px;
+  background: #f8fbff;
+}
+
+.evidence-card summary {
   display: grid;
   align-content: space-between;
   min-height: 124px;
   padding: 17px;
-  background: #f8fbff;
+  cursor: pointer;
+  list-style: none;
+}
+
+.evidence-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.evidence-card summary small {
+  margin-top: 12px;
+  color: #6c83a2;
+  font: 700 8.5px/1 var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+}
+
+.evidence-close-label {
+  display: none;
+}
+
+.evidence-card[open] .evidence-open-label {
+  display: none;
+}
+
+.evidence-card[open] .evidence-close-label {
+  display: block;
 }
 
 .evidence-grid strong {
@@ -1139,6 +1218,20 @@ h3 {
   color: #8b4e22;
   font-size: clamp(14px, 1.5vw, 19px);
   line-height: 1.1;
+}
+
+.evidence-how {
+  padding: 15px 17px 18px;
+  border-top: 1px solid #d8e3f1;
+  color: #3f5573;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.evidence-how code {
+  color: #0e4fa8;
+  font-family: var(--font-mono), monospace;
+  overflow-wrap: anywhere;
 }
 
 .evidence-link {
@@ -2285,6 +2378,7 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+
   .principles-grid article {
     min-height: 0;
   }
@@ -2492,6 +2586,36 @@ h3 {
   background: rgba(145, 190, 255, 0.55);
 }
 
+.archflow-story summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.archflow-story summary::-webkit-details-marker {
+  display: none;
+}
+
+.archflow-story summary::after {
+  content: " +";
+  color: #75b4ff;
+  font-family: var(--font-mono), monospace;
+  font-weight: 800;
+}
+
+.archflow-story[open] summary::after {
+  content: " −";
+}
+
+.archflow-story p {
+  margin: 8px 0 4px;
+  padding: 9px 10px;
+  border-left: 2px solid rgba(117, 180, 255, 0.45);
+  color: #aebfda;
+  background: rgba(13, 44, 85, 0.38);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 .archflow-consumers {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2567,13 +2691,30 @@ h3 {
   margin-top: 20px;
 }
 
-.tool-ref-group h4 {
+.tool-ref-group summary {
   margin: 0 0 10px;
   color: rgba(160, 190, 228, 0.85);
+  cursor: pointer;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.09em;
+  list-style: none;
   text-transform: uppercase;
+}
+
+.tool-ref-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-ref-group summary::before {
+  content: "+";
+  display: inline-block;
+  width: 18px;
+  color: #79b6ff;
+}
+
+.tool-ref-group[open] summary::before {
+  content: "−";
 }
 
 .tool-ref-group dl {
