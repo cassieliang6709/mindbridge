@@ -2536,3 +2536,71 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- MCP tool reference ------------------------------------------------ */
+
+.tool-ref {
+  margin-top: 28px;
+  padding: 24px;
+  border: 1px solid rgba(148, 176, 214, 0.18);
+  border-radius: 18px;
+  background: rgba(11, 26, 51, 0.42);
+  scroll-margin-top: 90px;
+}
+
+.tool-ref-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.tool-ref-head p {
+  margin: 6px 0 0;
+  color: rgba(203, 219, 241, 0.72);
+  font-size: 0.88rem;
+}
+
+.tool-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 28px;
+  margin-top: 20px;
+}
+
+.tool-ref-group h4 {
+  margin: 0 0 10px;
+  color: rgba(160, 190, 228, 0.85);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tool-ref-group dl {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.tool-ref-group dt code {
+  font-size: 0.82rem;
+  color: #cfe3ff;
+}
+
+.tool-ref-group dd {
+  margin: 3px 0 0;
+  color: rgba(203, 219, 241, 0.76);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.lane-tools-link {
+  margin-top: 14px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 860px) {
+  .tool-ref-grid {
+    grid-template-columns: 1fr;
+  }
+}

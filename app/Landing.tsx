@@ -192,8 +192,9 @@ const copy = {
     docDesc:
       "MindBridge 是一款反思型 AI Companion：它用透明、可追溯、能识别变化的 Memory Core，帮助你看见什么没变、什么已经改变。",
     nav: ["在编程 Agent 中使用", "它如何记忆", "实验依据"],
-    demo: "试试 Companion Loop",
-    stage: "2 分钟可点击合成演示",
+    demo: "连接 Codex 和 Claude Code",
+    stage: "本机 MCP · 两个客户端已验证",
+    demoSecondary: "或先看 2 分钟合成演示",
     heroNote: "你的 AI 记得你，也记得你已经改变。",
     title: (
       <>
@@ -411,6 +412,31 @@ const copy = {
         "调用 get_memory_record(42)；确认后调用 edit_memory(42, ...) 或 archive_memory(42)。",
       ],
     ] as [string, string, string][],
+    laneToolsLink: "看这 11 个工具分别能做什么",
+    toolRefTitle: "11 个工具分别能做什么",
+    toolRefNote:
+      "读取类可以直接调用；写入类都需要你确认。括号里是常用参数。",
+    toolRefGroups: [
+      ["读 · 回顾", [
+        ["get_daily_card", "读某一天的 T2 卡片，看那天到底做了什么。"],
+        ["get_daily_review", "一次看全：当天 T2、两条 T3 通道，以及待确认的模式候选。"],
+        ["review_long_term_memory", "按 namespace 列出长期记忆，不做语义排序，用于完整审计。"],
+        ["temporal_query", "按问题召回相关偏好，越近的权重越高。"],
+      ]],
+      ["写 · 需你确认", [
+        ["upsert_preference", "存一条持久事实；写入前先和已有记忆去重。"],
+      ]],
+      ["模式 · 先候选再确认", [
+        ["propose_pattern", "提出一个关于你的假设，先放在 T3 之外的候选层。"],
+        ["review_pattern_candidates", "查看候选和它们的证据，不改动 T3。"],
+        ["resolve_pattern", "把你的确认 / 改写 / 拒绝落到候选上，只有前两者会进 T3。"],
+      ]],
+      ["维护 · Memory Garden", [
+        ["get_memory_record", "按 id 精确读一条 T3，用于引用和核对。"],
+        ["edit_memory", "用你确认过的措辞替换一条记忆，旧版本仍可追溯。"],
+        ["archive_memory", "关闭一条记忆，不删历史。"],
+      ]],
+    ] as [string, [string, string][]][],
     trustEyebrow: "信任边界",
     trustTitle: "本地优先，不等于含糊其辞。",
     trustNote:
@@ -562,8 +588,9 @@ const copy = {
     docDesc:
       "A reflective AI companion with a transparent temporal Memory Core: trace what stayed, what changed, and what should no longer define you.",
     nav: ["Use with coding agents", "How memory works", "Evidence"],
-    demo: "Try the Companion Loop",
-    stage: "2-minute interactive synthetic demo",
+    demo: "Connect Codex and Claude Code",
+    stage: "Local MCP · verified in both clients",
+    demoSecondary: "Or watch the 2-minute synthetic demo",
     heroNote: "Your AI should remember you — and remember that you changed.",
     title: (
       <>
@@ -783,6 +810,31 @@ const copy = {
         "Call get_memory_record(42) first; then call edit_memory(42, ...) or archive_memory(42).",
       ],
     ] as [string, string, string][],
+    laneToolsLink: "See what each of these 11 tools does",
+    toolRefTitle: "What each of the 11 tools does",
+    toolRefNote:
+      "Read tools run directly; every write asks you first. Grouped by what you get out of them.",
+    toolRefGroups: [
+      ["READ · REVIEW", [
+        ["get_daily_card", "Read one day's T2 card to see what actually happened."],
+        ["get_daily_review", "One day across T2, both T3 lanes, and pending pattern candidates."],
+        ["review_long_term_memory", "List long-term memory by namespace, unranked, for a full audit."],
+        ["temporal_query", "Recall preferences relevant to a question, newest weighted heavier."],
+      ]],
+      ["WRITE · ASKS YOU FIRST", [
+        ["upsert_preference", "Store a durable fact, deduplicated against what is already known."],
+      ]],
+      ["PATTERNS · CANDIDATE FIRST", [
+        ["propose_pattern", "Raise a hypothesis about you outside T3, as a candidate."],
+        ["review_pattern_candidates", "Read candidates and their evidence without touching T3."],
+        ["resolve_pattern", "Apply your confirm / edit / reject; only the first two reach T3."],
+      ]],
+      ["MAINTAIN · MEMORY GARDEN", [
+        ["get_memory_record", "Read one T3 row by id, for citing and checking."],
+        ["edit_memory", "Replace a memory with your confirmed wording; history stays."],
+        ["archive_memory", "Close a memory without deleting history."],
+      ]],
+    ] as [string, [string, string][]][],
     trustEyebrow: "Trust boundaries",
     trustTitle: "Local-first should be specific, not vague.",
     trustNote:
@@ -1000,16 +1052,19 @@ export function Landing({ locale }: { locale: Locale }) {
           <h1>{t.title}</h1>
           <p className="lede">{t.lede}</p>
           <div className="hero-actions">
-            <Link className="store-button" href={locale === "zh" ? "/interview-demo/zh" : "/interview-demo"}>
+            <a className="store-button" href="#codex-live">
               <ArrowRight weight="bold" />
               <span>
                 <small>{t.stage}</small>
                 {t.demo}
               </span>
-            </Link>
-            <a className="text-link" href="#codex-live">
-              {t.learn} <ArrowRight />
             </a>
+            <Link
+              className="text-link"
+              href={locale === "zh" ? "/interview-demo/zh" : "/interview-demo"}
+            >
+              {t.demoSecondary} <ArrowRight />
+            </Link>
           </div>
         </div>
 
@@ -1146,6 +1201,27 @@ export function Landing({ locale }: { locale: Locale }) {
             );
           })}
         </div>
+        <div className="tool-ref" id="tools">
+          <div className="tool-ref-head">
+            <h3>{t.toolRefTitle}</h3>
+            <p>{t.toolRefNote}</p>
+          </div>
+          <div className="tool-ref-grid">
+            {t.toolRefGroups.map(([group, tools]) => (
+              <div className="tool-ref-group" key={group}>
+                <h4>{group}</h4>
+                <dl>
+                  {tools.map(([name, what]) => (
+                    <div key={name}>
+                      <dt><code>{name}</code></dt>
+                      <dd>{what}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="principles shell" aria-labelledby="principles-title">
@@ -1189,6 +1265,11 @@ export function Landing({ locale }: { locale: Locale }) {
                   {lane.sources.map((source) => <code key={source}>{source}</code>)}
                   {index === 1 && <code>{t.laneBClients}</code>}
                 </div>
+                {index === 1 && (
+                  <a className="text-link lane-tools-link" href="#tools">
+                    {t.laneToolsLink} <ArrowRight />
+                  </a>
+                )}
               </div>
             ))}
           </div>
