@@ -375,29 +375,6 @@ const copy = {
     codexCopied: "已复制，粘贴进 Codex",
     codexGuide: "查看完整安装与使用指南",
     codexBoundary: "本机验证，不是公网托管服务；需要本地数据层运行。公开 Companion Loop 使用合成数据。",
-    setupEyebrow: "安装与运行环境",
-    setupTitle: "先安装 Claude Code，再把 MindBridge 接到同一台设备。",
-    setupNote:
-      "Claude Code 负责交互，MindBridge 在本机运行 MCP、Postgres / Redis 与 embedding。下面把官方最低要求和这台真实验证设备分开写清楚。",
-    setupRequirements: [
-      ["Claude Code 官方最低要求", "macOS 13+；Windows 10 1809+；Ubuntu 20.04+ / Debian 10+。4 GB+ RAM，x64 或 ARM64，并保持联网。"],
-      ["账户要求", "Claude Pro、Max、Team、Enterprise 或 Console。Claude Free 方案目前不包含 Claude Code。"],
-      ["MindBridge 额外运行层", "Git · Python 3.11+ · Docker · Ollama。本机 Postgres / Redis 保存分层记忆，nomic-embed-text 生成本地 embedding。"],
-    ] as [string, string][],
-    setupCommands: [
-      ["macOS / Linux / WSL · 官方推荐的 native installer", "curl -fsSL https://claude.ai/install.sh | bash"],
-      ["Windows PowerShell", "irm https://claude.ai/install.ps1 | iex"],
-      ["验证 Claude Code", "claude --version && claude doctor"],
-      ["连接 MindBridge", "scripts/install-claude-mcp.sh && claude mcp list"],
-    ] as [string, string][],
-    setupDeviceTitle: "当前真实验证设备 · 2026-08-20",
-    setupDeviceFacts: [
-      "MacBook Pro · Apple M1 Pro 8-core · 16 GB RAM",
-      "macOS 26.5.2 · arm64 · 验证时可用磁盘 122 GiB",
-      "Claude Code 2.1.226 · MindBridge Python 3.12.13",
-      "Docker 29.2.1 · Ollama 0.32.5 · Postgres / Redis healthy",
-    ],
-    setupOfficial: "查看 Claude Code 官方安装与系统要求",
     usageEyebrow: "在 Codex / Claude Code 里的六步用法",
     usageTitle: "先看今天，再区分工作偏好与关于自己的假设。",
     usageNote:
@@ -770,29 +747,6 @@ const copy = {
     codexCopied: "Copied — paste it into Codex",
     codexGuide: "Open the full install and usage guide",
     codexBoundary: "Verified locally, not a public hosted memory service; the local data layer must be running. The public Companion Loop uses synthetic data.",
-    setupEyebrow: "INSTALLATION & RUNTIME",
-    setupTitle: "Install Claude Code, then connect MindBridge on the same device.",
-    setupNote:
-      "Claude Code is the interaction surface; MindBridge runs MCP, Postgres / Redis and embeddings locally. Official minimums and the machine actually used for verification are listed separately.",
-    setupRequirements: [
-      ["Official Claude Code minimums", "macOS 13+; Windows 10 1809+; Ubuntu 20.04+ / Debian 10+. 4 GB+ RAM, x64 or ARM64, with an internet connection."],
-      ["Account", "Claude Pro, Max, Team, Enterprise or Console. The Claude Free plan currently does not include Claude Code."],
-      ["Additional MindBridge runtime", "Git · Python 3.11+ · Docker · Ollama. Local Postgres / Redis hold layered memory; nomic-embed-text creates local embeddings."],
-    ] as [string, string][],
-    setupCommands: [
-      ["macOS / Linux / WSL · recommended native installer", "curl -fsSL https://claude.ai/install.sh | bash"],
-      ["Windows PowerShell", "irm https://claude.ai/install.ps1 | iex"],
-      ["Verify Claude Code", "claude --version && claude doctor"],
-      ["Connect MindBridge", "scripts/install-claude-mcp.sh && claude mcp list"],
-    ] as [string, string][],
-    setupDeviceTitle: "Machine verified locally · Aug 20, 2026",
-    setupDeviceFacts: [
-      "MacBook Pro · Apple M1 Pro 8-core · 16 GB RAM",
-      "macOS 26.5.2 · arm64 · 122 GiB free at verification",
-      "Claude Code 2.1.226 · MindBridge Python 3.12.13",
-      "Docker 29.2.1 · Ollama 0.32.5 · Postgres / Redis healthy",
-    ],
-    setupOfficial: "Read the official Claude Code installation requirements",
     usageEyebrow: "SIX STEPS IN CODEX / CLAUDE CODE",
     usageTitle: "Review today, then separate work preferences from hypotheses about yourself.",
     usageNote:
@@ -1161,51 +1115,6 @@ export function Landing({ locale }: { locale: Locale }) {
           </div>
           <code className="codex-prompt">{t.codexPrompt}</code>
           <small>{t.codexBoundary}</small>
-        </div>
-      </section>
-
-      <section className="client-setup shell" aria-labelledby="client-setup-title">
-        <div className="section-heading split setup-heading">
-          <div>
-            <p className="eyebrow">{t.setupEyebrow}</p>
-            <h2 id="client-setup-title">{t.setupTitle}</h2>
-          </div>
-          <p>{t.setupNote}</p>
-        </div>
-        <div className="setup-grid">
-          <div className="setup-panel requirement-panel">
-            {t.setupRequirements.map(([title, note]) => (
-              <article key={title}>
-                <Check weight="bold" />
-                <div><h3>{title}</h3><p>{note}</p></div>
-              </article>
-            ))}
-            <a
-              className="text-link setup-official"
-              href="https://code.claude.com/docs/en/installation"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t.setupOfficial} <ArrowRight />
-            </a>
-          </div>
-          <div className="setup-panel command-panel">
-            {t.setupCommands.map(([label, command]) => (
-              <div className="setup-command" key={label}>
-                <span>{label}</span>
-                <code>{command}</code>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="device-proof">
-          <div className="device-proof-title">
-            <Laptop weight="fill" />
-            <strong>{t.setupDeviceTitle}</strong>
-          </div>
-          <div className="device-facts">
-            {t.setupDeviceFacts.map((fact) => <span key={fact}>{fact}</span>)}
-          </div>
         </div>
       </section>
 
