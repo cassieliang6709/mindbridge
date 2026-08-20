@@ -152,8 +152,14 @@ class MLXChatProvider:
         model: str = "mlx-community/Qwen2.5-3B-Instruct-4bit",
         timeout: float = 180.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        wire_model: str = "default_model",
     ) -> None:
         self.model = model
+        # What goes on the wire. mlx_lm.server ignores the real name and only
+        # answers to the alias for whatever model+adapter it was started with,
+        # so that alias is the default. Servers that route by name (ollama,
+        # vLLM) 404 on the alias and need the real one passed explicitly.
+        self.wire_model = wire_model
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._timeout = timeout
         self._transport = transport
@@ -165,10 +171,7 @@ class MLXChatProvider:
             response = await client.post(
                 self._url,
                 json={
-                    # mlx_lm.server maps this alias to the model and adapter
-                    # selected when the process started. ``self.model`` is the
-                    # truthful model label recorded on the resulting T2 card.
-                    "model": "default_model",
+                    "model": self.wire_model,
                     "messages": [
                         {"role": message.role, "content": message.content}
                         for message in messages
@@ -332,6 +335,7 @@ def build_provider(
     *,
     base_url: str | None = None,
     timeout: float | None = None,
+    wire_model: str | None = None,
 ) -> ChatProvider:
     if kind == "openai":
         return OpenAIChatProvider(api_key or "", model or "gpt-4o-mini")
@@ -344,6 +348,7 @@ def build_provider(
             base_url or "http://127.0.0.1:8080/v1",
             model or "mlx-community/Qwen2.5-3B-Instruct-4bit",
             timeout or 180.0,
+            wire_model=wire_model or "default_model",
         )
     raise ValueError(
         f"unknown provider {kind!r}; use openai, gemini, claude-cli, or mlx"

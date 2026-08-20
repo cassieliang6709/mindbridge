@@ -31,6 +31,7 @@ In practice:
 | --- | --- | --- | --- |
 | **Teacher first-attempt schema compliance** | **84.7%** | **281** | current bar; `extract.runner --stats` |
 | **Local 3B MLX first-attempt compliance** | **86.7%** | **45 seeded holdout prompts** | `evals/mlx_holdout_seed_3407.json` |
+| **Base qwen2.5:7b first-attempt compliance** | **100%** | **15 real sessions via ollama** | this run, `meta.model="qwen2.5:7b"` in the dataset |
 | Teacher on the same seeded holdout | 82.2% | 45 | `evals/mlx_holdout_seed_3407.json` |
 | Same, earlier smaller sample | 81.4% | 86 | superseded — kept so older commits read correctly |
 | Teacher compliance with repair loop | 100% | 86 | same run |
@@ -171,3 +172,22 @@ failed build, because the status comes from `tail`.
 
 Installing the launchd agent, writing API keys, running a migration, pushing,
 renaming the public repo. Build it, show what it would do, then wait.
+
+
+## Schema compliance is not extraction quality (measured twice)
+
+Base `qwen2.5:7b` scored **15/15 first-attempt schema compliance** against the
+teacher's **84.4%** — and was still the worse extractor. Of the 5 preferences it
+wrote across 15 sessions, 3 were the session's next task ("增加 GitHub Actions CI
+是下一步的重要任务"), not a durable preference. The 3B failed the same way in the
+other direction, inventing preferences out of activity narration.
+
+Compliance measures whether the JSON parses. It says nothing about whether the
+right thing went into T3. Do not quote compliance as an extraction-quality
+number, on the résumé or anywhere else.
+
+Corollary found the same run: `reject_transient` was English-regex only. The
+teacher never tripped it in Chinese (**0 of 573 open T3 rows** matched Chinese
+todo markers), so the gap stayed invisible until a local model wrote Chinese
+todos straight through. A guard that only ever sees compliant input is not a
+guard that works — it is a guard that has never been tested.

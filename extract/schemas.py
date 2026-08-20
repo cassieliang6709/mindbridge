@@ -102,6 +102,18 @@ class ExtractedPreference(BaseModel):
                 "return no preference at all"
             )
 
+        # Chinese todo markers. The hosted teacher never produced one
+        # (0 of 573 T3 rows); the local models do — they write the session's
+        # next task into T3 as if it were a standing preference.
+        cn_todo = ("下一步的", "下一步要", "接下来要", "当前最重要",
+                   "待办", "尚未完成", "还没做完", "正在调试", "正在跑")
+        for marker in cn_todo:
+            if marker in value:
+                raise ValueError(
+                    f"content reads as a task in flight ({marker!r}), not a "
+                    "durable preference"
+                )
+
         return value.strip()
 
 

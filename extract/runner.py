@@ -158,6 +158,7 @@ async def run(args: argparse.Namespace) -> int:
                 timeout=(
                     settings.mlx_timeout_seconds if args.provider == "mlx" else None
                 ),
+                wire_model=args.wire_model,
             )
 
         default_models = {
@@ -306,6 +307,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="openai",
     )
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--wire-model",
+        default=None,
+        help=(
+            "Model name to put in the request body for --provider mlx. "
+            "Defaults to mlx_lm.server's 'default_model' alias; pass the real "
+            "name for servers that route by it, e.g. ollama."
+        ),
+    )
     parser.add_argument(
         "--base-url",
         default=None,
