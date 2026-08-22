@@ -42,6 +42,8 @@ from .models import (
     TurnCreate,
     UpsertPreferenceRequest,
     UpsertPreferenceResult,
+    MemoryMutationRequest,
+    MemoryMutationResult,
 )
 from .settings import Settings, get_settings
 
@@ -176,6 +178,7 @@ class MemoryService:
             request.category,
             embedding,
             request.decay_factor,
+            request.project,
         )
 
         action = "inserted"
@@ -218,6 +221,45 @@ class MemoryService:
             limit=limit,
             include_superseded=include_superseded,
             namespaces=namespaces,
+        )
+
+    async def get_memory(self, memory_id: int) -> MemoryWithDecay:
+        return await self.vectors.get_with_decay(memory_id)
+
+    async def archive_memory(self, memory_id: int) -> MemoryMutationResult:
+        record = await self.vectors.archive(memory_id)
+        await self.cache.invalidate_namespace(_QUERY_NAMESPACE)
+        return MemoryMutationResult(
+            action="archive",
+            target_id=record.id,
+            replacement_id=record.id,
+            memory=await self.vectors.get_with_decay(record.id),
+            replacement_reason="manual archive requested",
+        )
+
+    async def edit_memory(
+        self,
+        memory_id: int,
+        request: MemoryMutationRequest,
+    ) -> MemoryMutationResult:
+        existing = await self.vectors.get(memory_id)
+        if existing.valid_at is not None:
+            raise ValueError(f"memory {memory_id} is already closed")
+
+        [embedding] = await self.embedder.embed([request.content])
+        replacement = await self.vectors.edit(
+            memory_id,
+            request.content,
+            embedding,
+            decay_factor=request.decay_factor,
+        )
+        await self.cache.invalidate_namespace(_QUERY_NAMESPACE)
+        return MemoryMutationResult(
+            action="edit",
+            target_id=memory_id,
+            replacement_id=replacement.id,
+            memory=await self.vectors.get_with_decay(replacement.id),
+            replacement_reason="manual edit created a replacement",
         )
 
     # --- reflective candidates ------------------------------------------
@@ -336,6 +378,7 @@ class MemoryService:
             "w": request.time_window_days,
             "c": sorted(request.categories) if request.categories else None,
             "n": sorted(request.namespaces) if request.namespaces else None,
+            "p": request.project,
             "s": request.include_superseded,
         }
         normalised_query = request.query_string.strip().lower()
@@ -377,6 +420,7 @@ class MemoryService:
             categories=request.categories,
             namespaces=request.namespaces,
             include_superseded=request.include_superseded,
+            project=request.project,
         )
         result = TemporalQueryResult(
             query=request.query_string,

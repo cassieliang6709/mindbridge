@@ -74,13 +74,27 @@ CREATE TABLE IF NOT EXISTS memory_vectors (
     superseded_by    BIGINT      REFERENCES memory_vectors (id) ON DELETE SET NULL,
     access_count     INTEGER     NOT NULL DEFAULT 0,
     decay_factor     REAL        NOT NULL DEFAULT 1.0,
-    last_accessed_at TIMESTAMPTZ
+    last_accessed_at TIMESTAMPTZ,
+    -- NULL means the preference holds everywhere. A project name scopes it:
+    -- "varied base actions in the pet animations" is true inside that app and
+    -- noise anywhere else, so retrieval boosts the current project and leaves
+    -- global rows always visible.
+    project          TEXT
 );
 
 -- Existing databases predate the two T3 lanes. They remain operational by
 -- default; reflective memories are only created through a confirmed write.
 ALTER TABLE memory_vectors
     ADD COLUMN IF NOT EXISTS namespace TEXT NOT NULL DEFAULT 'operational';
+
+-- Databases created before preferences carried a scope. NULL is correct for
+-- them: they were extracted without the question being asked, so calling them
+-- global is the honest default.
+ALTER TABLE memory_vectors
+    ADD COLUMN IF NOT EXISTS project TEXT;
+
+CREATE INDEX IF NOT EXISTS memory_vectors_project_idx
+    ON memory_vectors (project) WHERE valid_at IS NULL;
 
 DO $$
 BEGIN

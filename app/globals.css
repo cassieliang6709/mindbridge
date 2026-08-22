@@ -224,12 +224,12 @@ nav a:hover,
 .hero {
   position: relative;
   z-index: 1;
-  min-height: 500px;
+  min-height: 620px;
   display: grid;
-  grid-template-columns: 0.85fr 1.15fr;
+  grid-template-columns: 0.78fr 1.22fr;
   align-items: center;
-  gap: 36px;
-  padding: 40px 0 24px;
+  gap: 10px;
+  padding: 24px 0 34px;
 }
 
 .hero-copy {
@@ -248,7 +248,7 @@ nav a:hover,
 }
 
 .showcase-intro h2 {
-  margin: 8px 0 7px;
+  margin: 0 0 9px;
   font-size: clamp(24px, 2.2vw, 34px);
   line-height: 1.05;
   letter-spacing: -0.045em;
@@ -276,7 +276,7 @@ h3 {
 
 .hero-copy h1 {
   margin: 0 0 19px;
-  font-size: clamp(44px, 4.3vw, 68px);
+  font-size: clamp(42px, 3.8vw, 58px);
   line-height: 0.95;
   letter-spacing: -0.07em;
 }
@@ -318,6 +318,89 @@ h3 {
 .text-link svg {
   flex: none;
   width: 17px;
+}
+
+/* --- cross-client memory demo ------------------------------------------ */
+
+.memory-demo {
+  min-width: 0;
+  margin: 0;
+}
+
+.memory-laptop {
+  position: relative;
+  width: 112%;
+  aspect-ratio: 1568 / 1003;
+  margin-left: -8%;
+}
+
+.memory-laptop-frame {
+  object-fit: contain;
+  clip-path: polygon(
+    21.2% 6.2%,
+    91.8% 6.2%,
+    91.8% 85.2%,
+    97.8% 85.2%,
+    97.8% 90.4%,
+    14.4% 90.4%,
+    14.4% 85.2%,
+    21.2% 85.2%
+  );
+  opacity: 0;
+  transform: translateY(6px) scale(0.995);
+  pointer-events: none;
+  user-select: none;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+
+.memory-laptop-frame.is-active {
+  z-index: 1;
+  opacity: 1;
+  transform: none;
+}
+.memory-demo-caption {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  width: 72%;
+  margin: -1.2% 3% 0 auto;
+  color: #8fa8ca;
+  font: 600 9px/1 var(--font-mono), monospace;
+}
+
+.memory-demo-caption > span:last-child {
+  justify-self: end;
+}
+
+.memory-demo-controls {
+  display: flex;
+  gap: 7px;
+}
+
+.memory-demo-controls button {
+  width: 18px;
+  height: 4px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: transparent;
+  background: rgba(141, 181, 235, 0.28);
+  cursor: pointer;
+  transition: width 0.22s ease, background 0.22s ease;
+}
+
+.memory-demo-controls button.is-active {
+  width: 31px;
+  background: #5ba2ff;
+}
+
+.memory-demo-controls button:focus-visible {
+  outline: 2px solid #a9d2ff;
+  outline-offset: 4px;
 }
 
 /* --- phones (1Day mockup anatomy, MindBridge screens inside) ------------ */
@@ -855,6 +938,12 @@ h3 {
   border-color: #6cb1ff;
 }
 
+.codex-example-prompt {
+  margin-bottom: 0;
+  border-color: rgba(111, 174, 255, 0.18);
+  background: rgba(70, 132, 211, 0.08);
+}
+
 .codex-terminal small {
   display: block;
   margin-top: 12px;
@@ -865,6 +954,279 @@ h3 {
 
 .codex-guide {
   margin-top: 18px;
+}
+
+/* --- agent harness tool discovery ------------------------------------- */
+
+.harness-explainer {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  padding: 28px;
+  border: 1px solid rgba(118, 188, 255, 0.25);
+  border-radius: 18px;
+  background: rgba(7, 29, 63, 0.7);
+}
+
+.harness-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  align-items: end;
+  gap: 32px;
+}
+
+.harness-head h2 {
+  max-width: 720px;
+  margin: 10px 0 0;
+  font-size: clamp(28px, 3.2vw, 44px);
+  line-height: 1.03;
+  letter-spacing: -0.05em;
+}
+
+.harness-head > p {
+  margin: 0;
+  color: #aebfda;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.harness-chain {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 24px;
+}
+
+.harness-chain article {
+  position: relative;
+  min-width: 0;
+  padding: 15px 16px 16px;
+  border: 1px solid rgba(145, 190, 255, 0.17);
+  border-radius: 12px;
+  background: rgba(3, 18, 42, 0.68);
+}
+
+.harness-chain article > svg {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  padding: 2px;
+  border-radius: 999px;
+  color: #91c5ff;
+  background: #0a244b;
+  transform: translateY(-50%);
+}
+
+.harness-step-index {
+  color: #6faeff;
+  font: 800 9px/1 var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+}
+
+.harness-chain h3 {
+  margin: 9px 0 0;
+  color: #eef5ff;
+  font-size: 12px;
+}
+
+.harness-chain p {
+  margin: 7px 0 0;
+  color: #94a9c7;
+  font-size: 10.5px;
+  line-height: 1.52;
+  overflow-wrap: anywhere;
+}
+
+.harness-boundary {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.harness-verdict,
+.harness-levels {
+  padding: 18px;
+  border: 1px solid rgba(145, 190, 255, 0.15);
+  border-radius: 12px;
+  background: rgba(14, 51, 98, 0.36);
+}
+
+.harness-verdict > span {
+  color: #8fdba8;
+  font: 800 9px/1 var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+}
+
+.harness-verdict > strong {
+  display: block;
+  margin-top: 9px;
+  color: #eef5ff;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.harness-verdict > p {
+  margin: 8px 0 0;
+  color: #9db2cf;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.harness-levels h3 {
+  margin: 0 0 10px;
+  color: #eef5ff;
+  font-size: 12px;
+}
+
+.harness-levels > div {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(145, 190, 255, 0.1);
+}
+
+.harness-levels svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: #78b4ff;
+}
+
+.harness-levels p {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 10px;
+  margin: 0;
+  color: #8fa5c2;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.harness-levels strong {
+  color: #d9e7f7;
+}
+
+/* --- optional Codex reflection skill ---------------------------------- */
+
+.reflection-skill {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  padding: 22px 24px 19px;
+  border: 1px solid rgba(118, 188, 255, 0.27);
+  border-radius: 16px;
+  background: linear-gradient(125deg, rgba(7, 30, 68, 0.84), rgba(10, 50, 101, 0.58));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.reflection-skill-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: end;
+  gap: 28px;
+}
+
+.reflection-skill-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  margin: 0;
+  color: #8fdba8;
+  font: 700 9px/1 var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+}
+
+.reflection-skill-status svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.reflection-skill h2 {
+  margin: 10px 0 0;
+  color: #eef5ff;
+  font-size: clamp(25px, 2.8vw, 38px);
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+}
+
+.reflection-skill-head > p {
+  margin: 0;
+  color: #b9cce5;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.reflection-skill-rules {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.reflection-skill-rules article {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(145, 190, 255, 0.16);
+  border-radius: 11px;
+  background: rgba(4, 20, 46, 0.54);
+}
+
+.reflection-skill-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #a9d2ff;
+  background: rgba(38, 125, 238, 0.2);
+}
+
+.reflection-skill-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.reflection-skill-rules strong {
+  display: block;
+  color: #eef5ff;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.reflection-skill-rules p {
+  margin: 5px 0 0;
+  color: #9fb5d2;
+  font-size: 10.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.reflection-skill-boundary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 0;
+  color: #879fc0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.reflection-skill-boundary svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #c4a66d;
 }
 
 /* --- Codex MCP usage --------------------------------------------------- */
@@ -901,7 +1263,7 @@ h3 {
 
 .usage-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-top: 22px;
 }
@@ -946,15 +1308,38 @@ h3 {
   line-height: 1.45;
 }
 
-.usage-card code {
-  display: block;
+.usage-prompt {
+  display: grid;
+  gap: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(145, 190, 255, 0.12);
+}
+
+.usage-prompt code {
+  display: block;
   color: #b9dbff;
   font-family: var(--font-mono), monospace;
   font-size: 9.5px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.usage-prompt button {
+  width: max-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(114, 181, 255, 0.28);
+  border-radius: 8px;
+  color: #a8d2ff;
+  background: rgba(30, 106, 202, 0.14);
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.usage-prompt button:hover,
+.usage-prompt button:focus-visible {
+  color: #fff;
+  border-color: #6cb1ff;
 }
 
 /* --- narrative sections ------------------------------------------------ */
@@ -1039,6 +1424,26 @@ h3 {
   line-height: 1.55;
 }
 
+.principle-how {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(145, 190, 255, 0.14);
+}
+
+.principle-how summary {
+  width: max-content;
+  color: #8fc3ff;
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.principle-how p {
+  margin-top: 11px;
+  color: #c3d3e8;
+  font-size: 11px;
+}
+
 .path-notes {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
@@ -1106,7 +1511,7 @@ h3 {
 
 .evidence-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   margin-top: 25px;
   overflow: hidden;
@@ -1115,12 +1520,42 @@ h3 {
   background: #c7d7ec;
 }
 
-.evidence-grid article {
+.evidence-card {
+  display: grid;
+  min-height: 124px;
+  background: #f8fbff;
+}
+
+.evidence-card summary {
   display: grid;
   align-content: space-between;
   min-height: 124px;
   padding: 17px;
-  background: #f8fbff;
+  cursor: pointer;
+  list-style: none;
+}
+
+.evidence-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.evidence-card summary small {
+  margin-top: 12px;
+  color: #6c83a2;
+  font: 700 8.5px/1 var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+}
+
+.evidence-close-label {
+  display: none;
+}
+
+.evidence-card[open] .evidence-open-label {
+  display: none;
+}
+
+.evidence-card[open] .evidence-close-label {
+  display: block;
 }
 
 .evidence-grid strong {
@@ -1139,6 +1574,20 @@ h3 {
   color: #8b4e22;
   font-size: clamp(14px, 1.5vw, 19px);
   line-height: 1.1;
+}
+
+.evidence-how {
+  padding: 15px 17px 18px;
+  border-top: 1px solid #d8e3f1;
+  color: #3f5573;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.evidence-how code {
+  color: #0e4fa8;
+  font-family: var(--font-mono), monospace;
+  overflow-wrap: anywhere;
 }
 
 .evidence-link {
@@ -2132,11 +2581,15 @@ h3 {
 /* --- responsive --------------------------------------------------------- */
 
 @media (max-width: 1020px) {
-  /* Below this width the two 246px phones no longer fit beside the copy, so
-     the hero becomes one column and the phones stack. */
   .hero {
     grid-template-columns: 1fr;
+    gap: 8px;
+    padding-top: 52px;
     text-align: center;
+  }
+
+  .hero-copy {
+    padding-bottom: 6px;
   }
 
   .lede {
@@ -2147,12 +2600,43 @@ h3 {
     justify-content: center;
   }
 
+  .memory-demo {
+    width: min(100%, 850px);
+    margin-inline: auto;
+  }
+
+  .memory-laptop {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .paths-grid {
     grid-template-columns: 1fr;
   }
 
   .codex-live {
     grid-template-columns: 1fr;
+  }
+
+  .harness-head,
+  .harness-boundary {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 14px;
+  }
+
+  .harness-chain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .harness-chain article > svg {
+    display: none;
+  }
+
+  .reflection-skill-head {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 14px;
   }
 
   .usage-grid {
@@ -2199,7 +2683,7 @@ h3 {
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 860px) {
   .shell {
     width: min(100% - 32px, 560px);
   }
@@ -2240,6 +2724,26 @@ h3 {
     justify-content: center;
   }
 
+  .memory-demo {
+    width: 112%;
+    margin-left: -6%;
+  }
+
+  .memory-demo-caption {
+    width: 78%;
+    margin-top: -0.5%;
+    margin-right: 4%;
+    font-size: 8px;
+  }
+
+  .memory-demo-caption > span:last-child {
+    display: none;
+  }
+
+  .memory-demo-caption {
+    grid-template-columns: 1fr auto;
+  }
+
   /* Two 246px phones cannot sit side by side; stack them instead of letting
      .site-page's overflow:hidden clip the second one off-screen. */
   .phones {
@@ -2255,6 +2759,8 @@ h3 {
   .how,
   .arch,
   .codex-live,
+  .harness-explainer,
+  .reflection-skill,
   .codex-usage,
   .principles,
   .trust,
@@ -2278,12 +2784,20 @@ h3 {
   }
 
   .usage-grid,
+  .harness-chain,
+  .reflection-skill-rules,
   .principles-grid,
   .trust-grid,
   .path-notes,
   .evidence-grid {
     grid-template-columns: 1fr;
   }
+
+  .harness-levels p {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
 
   .principles-grid article {
     min-height: 0;
@@ -2492,6 +3006,36 @@ h3 {
   background: rgba(145, 190, 255, 0.55);
 }
 
+.archflow-story summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.archflow-story summary::-webkit-details-marker {
+  display: none;
+}
+
+.archflow-story summary::after {
+  content: " +";
+  color: #75b4ff;
+  font-family: var(--font-mono), monospace;
+  font-weight: 800;
+}
+
+.archflow-story[open] summary::after {
+  content: " −";
+}
+
+.archflow-story p {
+  margin: 8px 0 4px;
+  padding: 9px 10px;
+  border-left: 2px solid rgba(117, 180, 255, 0.45);
+  color: #aebfda;
+  background: rgba(13, 44, 85, 0.38);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
 .archflow-consumers {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2567,13 +3111,30 @@ h3 {
   margin-top: 20px;
 }
 
-.tool-ref-group h4 {
+.tool-ref-group summary {
   margin: 0 0 10px;
   color: rgba(160, 190, 228, 0.85);
+  cursor: pointer;
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.09em;
+  list-style: none;
   text-transform: uppercase;
+}
+
+.tool-ref-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-ref-group summary::before {
+  content: "+";
+  display: inline-block;
+  width: 18px;
+  color: #79b6ff;
+}
+
+.tool-ref-group[open] summary::before {
+  content: "−";
 }
 
 .tool-ref-group dl {

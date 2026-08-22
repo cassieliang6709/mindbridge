@@ -26,6 +26,11 @@ HOLDOUT_OUT = Path("train/dataset/holdout.jsonl")
 MIN_PAIRS_FOR_TRAINING = 200
 
 
+# Which models count as the teacher. A fine-tune learns the mapping in this
+# file, so anything here becomes the standard the student is trained toward.
+TEACHER_MODELS = frozenset({"sonnet"})
+
+
 def _bucket(date: str) -> float:
     """Stable 0..1 position for a date, so the split never shifts."""
     digest = hashlib.blake2b(date.encode(), digest_size=8).digest()
@@ -61,6 +66,20 @@ def main() -> int:
             "--send-to-provider"
         )
         return 1
+
+    # Teacher rows only. Every extraction lands in the same file regardless of
+    # which model wrote it, so a run that measured a local model leaves its own
+    # output sitting next to the teacher's. Training on that teaches the student
+    # its own mistakes — the base 7B rows in this file include three of the
+    # day's todos written into T3 as standing preferences.
+    teacher = [
+        pair for pair in pairs
+        if (pair.get("meta") or {}).get("model") in TEACHER_MODELS
+    ]
+    if len(teacher) != len(pairs):
+        skipped = len(pairs) - len(teacher)
+        print(f"skipped {skipped} row(s) not written by the teacher")
+    pairs = teacher
 
     # De-duplicate by (date, session), keeping the last extraction for each.
     # Keying on date alone silently collapsed every session card onto its day —

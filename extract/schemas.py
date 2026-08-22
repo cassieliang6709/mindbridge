@@ -48,6 +48,13 @@ class ExtractedPreference(BaseModel):
         max_length=400,
         description="What in the transcript supports this, quoted or paraphrased.",
     )
+    project: str | None = Field(
+        default=None,
+        description=(
+            "The project this preference is scoped to, exactly as given on the "
+            "PROJECT line. Omit when the preference holds across every project."
+        ),
+    )
 
     @field_validator("content")
     @classmethod

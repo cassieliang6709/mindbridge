@@ -15,6 +15,8 @@ from .models import (
     DailyReview,
     MemoryWithDecay,
     MemoryNamespace,
+    MemoryMutationRequest,
+    MemoryMutationResult,
     PatternCandidate,
     PatternCandidateCreate,
     PatternDecisionRequest,
@@ -153,6 +155,35 @@ async def list_memories(
     """
     namespaces = [namespace] if namespace is not None else None
     return await service.list_memories(limit, include_superseded, namespaces)
+
+
+@app.get("/memories/{memory_id}", tags=["T3 vector memory"])
+async def get_memory(
+    memory_id: Annotated[int, Path(ge=1)],
+    service: ServiceDep,
+) -> MemoryWithDecay:
+    try:
+        return await service.get_memory(memory_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@app.patch("/memories/{memory_id}", tags=["T3 vector memory"])
+async def mutate_memory(
+    memory_id: Annotated[int, Path(ge=1)],
+    request: MemoryMutationRequest,
+    service: ServiceDep,
+) -> MemoryMutationResult:
+    try:
+        if request.action == "archive":
+            return await service.archive_memory(memory_id)
+        return await service.edit_memory(memory_id, request)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
 
 
 @app.get("/turns", tags=["T1 session buffer"])

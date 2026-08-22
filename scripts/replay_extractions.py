@@ -101,6 +101,7 @@ async def run(args: argparse.Namespace) -> int:
                     UpsertPreferenceRequest(
                         content=preference["content"],
                         category=preference.get("category", "other"),
+                        project=preference.get("project"),
                     )
                 )
                 actions[outcome.action] += 1

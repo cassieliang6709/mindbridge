@@ -263,6 +263,31 @@ non-persistent Claude Code session then called `get_daily_review` through the
 registered MCP server and received T2, operational T3, reflective T3 and Pattern
 Candidates as four separate sections without invoking any write tool.
 
+#### Optional reflection skill for Codex
+
+The optional `mindbridge-reflection` Codex Skill lives on the client at
+`~/.codex/skills/mindbridge-reflection`. It is a client-side review policy, not
+the twelfth MCP tool: it teaches Codex how to compose the existing eleven
+MindBridge tools and does not change the MCP server or tool count.
+
+When present, the Skill:
+
+- chooses the narrowest review that answers the question, and keeps T2 separate
+  from operational and reflective T3;
+- requires conclusions to cite memory or card ids and dates, and requires
+  inferences to show counter-evidence and uncertainty;
+- keeps a Pattern Candidate outside personality conclusions — a candidate is
+  not a personality fact;
+- shows the exact change and gets explicit confirmation in the current session
+  before `archive`, `edit`, `upsert`, `confirm`, or `reject` actions;
+- does not invent evidence from chat memory when the MindBridge MCP is
+  unavailable.
+
+The Skill passed the official quick validator and a local Codex check on the
+verified machine. It is not yet included in the public installer, so the MCP
+installation commands above do not install it and no public Skill installation
+command is claimed here.
+
 That validation ran on a MacBook Pro (Apple M1 Pro, 8-core, 16 GB RAM), macOS
 26.5.2 / arm64, Claude Code 2.1.226, Python 3.12.13 inside the MindBridge
 virtualenv, Docker 29.2.1 and Ollama 0.32.5. The landing page separates this

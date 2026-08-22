@@ -46,10 +46,19 @@ habit, a standing constraint. Today's task is not a preference. Return an empty 
 preferences list rather than inventing one.
 6. Quote or closely paraphrase the transcript in each preference's evidence \
 field.
-7. Every preference needs all four fields: content, category, confidence and \
-evidence. confidence is a number between 0 and 1 — how sure you are the \
-preference is durable, not how important it is. Omitting it is the single most \
-common way this reply gets rejected.
+7. Every preference needs content, category, confidence and evidence. \
+confidence is a number between 0 and 1. It says how settled the preference is, \
+not how important: a decision the user stated and acted on is 0.8 or higher; \
+something they were still weighing out loud is 0.5 or lower. Omitting \
+confidence is the single most common way this reply gets rejected.
+8. A preference is about the user, not about the system. "You check retrieval \
+quality end to end before shipping" is about the user. "The dedup threshold is \
+0.80" is a configuration value — it belongs in code and docs, and must not be \
+returned as a preference.
+9. Set "project" when a preference only holds inside the project named in the \
+PROJECT line — a convention for one app, a rule for one repo. Leave it out when \
+the preference follows the user everywhere, which is the more useful kind. If \
+no PROJECT line is given, leave it out.
 
 Return JSON matching this schema:
 %s
@@ -59,7 +68,7 @@ Return JSON matching this schema:
 # Recorded per attempt so a first-pass rate is never a silent blend of two
 # different prompts — v1 never mentioned `confidence`, which the schema requires,
 # and that alone accounted for 17 of 19 failures across the first 46 days.
-PROMPT_VERSION = "v2-confidence-explicit"
+PROMPT_VERSION = "v4-scope-confidence-subject"
 
 
 def system_prompt() -> str:
@@ -76,9 +85,16 @@ class DayInput:
     assistant_turns: list[str]
     total_turns: int
     sampled_turns: int
+    project: str | None = None
 
     def render(self) -> str:
-        lines = [f"DATE: {self.date}", "", "FACTS (exact, computed locally):"]
+        lines = [f"DATE: {self.date}"]
+        if self.project:
+            # The model decides whether a preference is project-scoped; it
+            # cannot know what the project is called, because the name comes
+            # from the working directory and never appears in the turns.
+            lines.append(f"PROJECT: {self.project}")
+        lines += ["", "FACTS (exact, computed locally):"]
         lines.extend(f"- {fact}" for fact in self.facts)
         lines.append("")
         lines.append(
@@ -102,6 +118,7 @@ def build_day_input(
     *,
     max_input_tokens: int = 12_000,
     per_turn_chars: int = 400,
+    project: str | None = None,
 ) -> DayInput:
     """Compress a day's turns to fit a token budget.
 
@@ -162,6 +179,7 @@ def build_day_input(
         assistant_turns=kept_assistant,
         total_turns=len(turns),
         sampled_turns=len(kept_user) + len(kept_assistant),
+        project=project,
     )
 
 

@@ -45,6 +45,7 @@ from api.models import (
     MemoryCategory,
     MemoryNamespace,
     MemoryWithDecay,
+    MemoryMutationRequest,
     PatternCandidate,
     PatternCandidateCreate,
     PatternDecisionRequest,
@@ -148,6 +149,12 @@ def _format_memory(record: MemoryWithDecay) -> str:
     )
 
 
+def _mutation_summary(action: str, target_id: int, replacement_id: int) -> str:
+    return (
+        f"memory_garden action={action} · target={target_id} · replacement={replacement_id}"
+    )
+
+
 def _format_pattern(candidate: PatternCandidate) -> str:
     lines = [
         f"Pattern Candidate [{candidate.id}] · status={candidate.status}",
@@ -229,6 +236,47 @@ async def review_long_term_memory(
         f"superseded={'included' if include_superseded else 'excluded'}"
     )
     return "\n\n".join([header, *(_format_memory(record) for record in records)])
+
+
+@mcp.tool()
+async def get_memory_record(memory_id: int) -> str:
+    """Read one T3 row by id for a precise audit reference."""
+    service = await _get_service()
+    try:
+        return _format_memory(await service.get_memory(memory_id))
+    except KeyError:
+        return f"memory [{memory_id}] not found."
+
+
+@mcp.tool()
+async def archive_memory(memory_id: int) -> str:
+    """Close one open memory row without deleting history."""
+    service = await _get_service()
+    try:
+        result = await service.archive_memory(memory_id)
+    except KeyError:
+        return f"memory [{memory_id}] not found or already closed."
+    return _mutation_summary("archive", result.target_id, result.replacement_id)
+
+
+@mcp.tool()
+async def edit_memory(memory_id: int, content: str, decay_factor: float | None = None) -> str:
+    """Replace one open memory with user-confirmed edited wording."""
+    service = await _get_service()
+    try:
+        result = await service.edit_memory(
+            memory_id,
+            MemoryMutationRequest(
+                action="edit",
+                content=content,
+                decay_factor=decay_factor,
+            ),
+        )
+    except KeyError:
+        return f"memory [{memory_id}] not found."
+    except ValueError as exc:
+        return str(exc)
+    return _mutation_summary("edit", result.target_id, result.replacement_id)
 
 
 @mcp.tool()
@@ -389,6 +437,7 @@ async def temporal_query(
     time_window: Literal["7d", "30d", "90d", "1y", "all"] = "all",
     include_superseded: bool = False,
     namespace: Literal["operational", "reflective", "all"] = "all",
+    project: str | None = None,
 ) -> str:
     """Recall stored preferences relevant to a query, newest-weighted.
 
@@ -404,6 +453,8 @@ async def temporal_query(
         include_superseded: Include closed records, scored down. Useful when the
             user asks what they used to prefer.
         namespace: Search operational memory, reflective memory, or both.
+        project: Current project name. Other project-specific preferences rank
+            lower; global preferences remain unaffected.
 
     Returns:
         A formatted context block, one memory per line with id, date and score.
@@ -423,6 +474,7 @@ async def temporal_query(
             time_window_days=windows[time_window],
             include_superseded=include_superseded,
             namespaces=None if namespace == "all" else [namespace],
+            project=project,
         )
     )
     header = (

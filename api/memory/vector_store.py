@@ -30,9 +30,14 @@ from ..models import (
     UpsertAction,
 )
 
+# A preference scoped to a different project is usually irrelevant here, but
+# not always — the same habit often shows up under two project names. 0.5 is
+# enough to keep it out of the top hits without hiding it.
+_OTHER_PROJECT_PENALTY = 0.5
+
 _RECORD_COLUMNS = """
     id, content, namespace, category, created_at, valid_at, superseded_by,
-    access_count, decay_factor
+    access_count, decay_factor, project
 """
 
 
@@ -101,12 +106,13 @@ class VectorMemoryStore:
         category: MemoryCategory,
         embedding: list[float],
         decay_factor: float = 1.0,
+        project: str | None = None,
     ) -> MemoryRecord:
         row = await self._pool.fetchrow(
             f"""
             INSERT INTO memory_vectors
-                (content, namespace, category, embedding, decay_factor)
-            VALUES ($1, $2, $3, $4::vector, $5)
+                (content, namespace, category, embedding, decay_factor, project)
+            VALUES ($1, $2, $3, $4::vector, $5, $6)
             RETURNING {_RECORD_COLUMNS}
             """,
             content,
@@ -114,6 +120,7 @@ class VectorMemoryStore:
             category,
             to_pgvector(embedding),
             decay_factor,
+            project,
         )
         assert row is not None
         return MemoryRecord(**dict(row))
@@ -157,6 +164,116 @@ class VectorMemoryStore:
             raise KeyError(f"memory {old_id} not found or already closed")
         return MemoryRecord(**dict(row))
 
+    async def archive(self, memory_id: int) -> MemoryRecord:
+        """Close one open memory without replacement.
+
+        Archive is an intentional, non-destructive state change. `superseded_by`
+        is left as-is so the timeline stays stable for audit tools.
+        """
+        row = await self._pool.fetchrow(
+            f"""
+            UPDATE memory_vectors
+            SET valid_at = now()
+            WHERE id = $1 AND valid_at IS NULL
+            RETURNING {_RECORD_COLUMNS}
+            """,
+            memory_id,
+        )
+        if row is None:
+            raise KeyError(f"memory {memory_id} not found or already closed")
+        return MemoryRecord(**dict(row))
+
+    async def edit(
+        self,
+        memory_id: int,
+        content: str,
+        embedding: list[float],
+        decay_factor: float | None = None,
+    ) -> MemoryRecord:
+        """Replace one open memory with a user-confirmed edited version.
+
+        Keeps the same namespace/category/project and decay_factor by default;
+        the caller may provide a custom decay_factor for the replacement.
+        """
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    f"""
+                    SELECT {_RECORD_COLUMNS}
+                    FROM memory_vectors
+                    WHERE id = $1 FOR UPDATE
+                    """,
+                    memory_id,
+                )
+                if row is None:
+                    raise KeyError(f"memory {memory_id} not found")
+
+                old_record = MemoryRecord(**dict(row))
+                if old_record.valid_at is not None:
+                    raise ValueError(f"memory {memory_id} is already closed")
+
+                # Insert replacement first, then close old so history remains
+                # auditable even on an interrupted transaction.
+                new_row = await conn.fetchrow(
+                    f"""
+                    INSERT INTO memory_vectors
+                        (content, namespace, category, embedding, decay_factor, project)
+                    VALUES ($1, $2, $3, $4::vector, $5, $6)
+                    RETURNING {_RECORD_COLUMNS}
+                    """,
+                    content,
+                    old_record.namespace,
+                    old_record.category,
+                    to_pgvector(embedding),
+                    decay_factor if decay_factor is not None else old_record.decay_factor,
+                    old_record.project,
+                )
+                new_record = MemoryRecord(**dict(new_row))
+
+                await conn.execute(
+                    f"""
+                    UPDATE memory_vectors
+                    SET valid_at = now(), superseded_by = $2
+                    WHERE id = $1
+                    """,
+                    memory_id,
+                    new_record.id,
+                )
+        return new_record
+
+    async def get(self, memory_id: int) -> MemoryRecord:
+        row = await self._pool.fetchrow(
+            f"""
+            SELECT {_RECORD_COLUMNS}
+            FROM memory_vectors
+            WHERE id = $1
+            """,
+            memory_id,
+        )
+        if row is None:
+            raise KeyError(f"memory {memory_id} not found")
+        return MemoryRecord(**dict(row))
+
+    async def get_with_decay(self, memory_id: int) -> MemoryWithDecay:
+        row = await self._pool.fetchrow(
+            f"""
+            SELECT {_RECORD_COLUMNS},
+                   EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0 AS age_days,
+                   exp(-$2::double precision * decay_factor
+                     * EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0)
+                     * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $3::double precision END
+                     AS decay_multiplier
+            FROM memory_vectors
+            WHERE id = $1
+            """,
+            memory_id,
+            self._decay_rate,
+            self._superseded_penalty,
+        )
+        if row is None:
+            raise KeyError(f"memory {memory_id} not found")
+        return MemoryWithDecay(**dict(row))
+
     def classify_write(self, similarity: float | None) -> UpsertAction:
         if similarity is not None and similarity >= self._dedup_threshold:
             return "refreshed"
@@ -173,8 +290,15 @@ class VectorMemoryStore:
         categories: list[MemoryCategory] | None = None,
         namespaces: list[MemoryNamespace] | None = None,
         include_superseded: bool = False,
+        project: str | None = None,
     ) -> list[MemoryHit]:
         """Top-K by cosine similarity discounted by age.
+
+        `project` scopes the result without filtering it. A preference tied to
+        another project is pushed down rather than removed, because the scope
+        was assigned by a model and a wrong scope should cost rank, not erase
+        the memory. Global rows (project IS NULL) are never penalised — they
+        hold everywhere by definition.
 
         The ORDER BY repeats the score expression rather than referencing the
         alias so the planner can use it directly; Postgres does not allow an
@@ -200,6 +324,12 @@ class VectorMemoryStore:
                    cosine_similarity
                      * exp(-$7::double precision * decay_factor * age_days)
                      * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $8::double precision END
+                     * CASE
+                         WHEN $9::text IS NULL THEN 1.0
+                         WHEN project IS NULL THEN 1.0
+                         WHEN project = $9::text THEN 1.0
+                         ELSE $10::double precision
+                       END
                      AS score
             FROM scored
             ORDER BY score DESC
@@ -213,6 +343,8 @@ class VectorMemoryStore:
             [str(namespace) for namespace in namespaces] if namespaces else None,
             self._decay_rate,
             self._superseded_penalty,
+            project,
+            _OTHER_PROJECT_PENALTY,
         )
         hits = [MemoryHit(**dict(row)) for row in rows]
         if hits:

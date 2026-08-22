@@ -41,6 +41,7 @@ UpsertAction = Literal["inserted", "refreshed", "superseded"]
 CardScope = Literal["day", "session", "all"]
 PatternStatus = Literal["pending", "confirmed", "edited", "rejected"]
 PatternDecision = Literal["confirm", "edit", "reject"]
+MemoryMutationAction = Literal["archive", "edit"]
 
 
 class Turn(BaseModel):
@@ -146,6 +147,13 @@ class MemoryRecord(BaseModel):
     decay_factor: float = Field(
         description="Per-record multiplier on λ; 1.0 follows the global rate."
     )
+    project: str | None = Field(
+        default=None,
+        description=(
+            "Which project this preference holds inside. None means it holds "
+            "everywhere."
+        ),
+    )
 
     @property
     def is_open(self) -> bool:
@@ -185,6 +193,13 @@ class UpsertPreferenceRequest(BaseModel):
         ),
     )
     decay_factor: float = Field(default=1.0, gt=0.0)
+    project: str | None = Field(
+        default=None,
+        description=(
+            "Scope this preference to one project. Leave unset for a "
+            "preference that holds across all of them."
+        ),
+    )
     supersedes_conflicting: bool = Field(
         default=False,
         description=(
@@ -213,6 +228,42 @@ class UpsertPreferenceResult(BaseModel):
     reason: str
 
 
+class MemoryMutationRequest(BaseModel):
+    """Mutable memory operations for the Memory Garden path."""
+
+    action: MemoryMutationAction
+    content: str | None = Field(default=None, min_length=1)
+    decay_factor: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Optional override for the replacement record's decay factor. If omitted, "
+            "the edited memory keeps the current decay_factor."
+        ),
+    )
+    reason: str | None = Field(default=None, max_length=400)
+
+    @model_validator(mode="after")
+    def require_content_for_edit(self) -> "MemoryMutationRequest":
+        if self.action == "edit" and not self.content:
+            raise ValueError("edit action requires content")
+        return self
+
+
+class MemoryMutationResult(BaseModel):
+    """Result of archive/edit operations.
+
+    For `edit`, `target_id` points to the old record, `replacement_id` to the
+    new one. For `archive`, both ids are the same.
+    """
+
+    action: MemoryMutationAction
+    target_id: int
+    replacement_id: int
+    memory: MemoryWithDecay
+    replacement_reason: str
+
+
 class TemporalQueryRequest(BaseModel):
     query_string: str = Field(min_length=1)
     top_k: int = Field(default=5, ge=1, le=50)
@@ -223,6 +274,13 @@ class TemporalQueryRequest(BaseModel):
     )
     categories: list[MemoryCategory] | None = None
     namespaces: list[MemoryNamespace] | None = None
+    project: str | None = Field(
+        default=None,
+        description=(
+            "Current project for ranking. None applies no project-specific "
+            "down-weighting."
+        ),
+    )
     include_superseded: bool = False
 
 

@@ -107,7 +107,7 @@ query it again to demonstrate cross-session recall.
 
 ## Everyday use from Codex or Claude Code
 
-MindBridge currently exposes eight tools:
+MindBridge currently exposes eleven MCP tools, including a small Memory Garden:
 
 - `get_daily_card` reads one T2 day card: what happened, observed facts and
   open threads. It does not change T3.
@@ -119,6 +119,10 @@ MindBridge currently exposes eight tools:
 - `upsert_preference` stores durable operational memory by default. Reflective
   patterns, values and identity hypotheses are rejected unless the user has
   confirmed the wording and the call sets `confirmed_by_user=true`.
+- `get_memory_record` reads one T3 row by id and shows full metadata.
+- `archive_memory` marks an existing T3 row as invalid (keeps audit history).
+- `edit_memory` replaces one row with user-confirmed edited wording and points
+  the old row to the replacement via `superseded_by`.
 - `propose_pattern` creates a reviewable candidate only after at least three
   observations across two dates. It does not write T3.
 - `review_pattern_candidates` shows supporting evidence, counter-evidence and
@@ -169,6 +173,12 @@ detail as a preference.
 
 > My preference changed: write the PRD in English first, then provide a
 > separate Chinese version. Ask MindBridge to supersede conflicts.
+
+### Audit and mutate a memory by id (Memory Garden)
+
+> Call `get_memory_record` for memory id 42. If the wording is wrong, call
+> `edit_memory` with my replacement sentence. If it's no longer true, call
+> `archive_memory` so it remains visible but not active.
 
 ### Audit history
 

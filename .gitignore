@@ -59,10 +59,18 @@ venv/
 
 # M2 training data: contains transcript excerpts from the local machine
 train/dataset/*.jsonl
+# Manual backup copies carry the same private transcript excerpts.
+train/dataset/*.bak
 # Derived from the above, so it carries the same transcript excerpts verbatim.
 # /outputs/ above is root-anchored and does not cover these.
 train/mlx_data/
 train/outputs/
+
+# Local precision-eval inputs and outputs contain session ids, narratives, and
+# extracted evidence from the private transcript corpus. Keep the reusable
+# evaluator code public, but never its local holdout or generated reports.
+evals/holdout_sessions.json
+evals/precision_*.json
 
 # Database dumps taken before migrations; contain personal preference text
 backups/

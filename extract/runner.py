@@ -23,6 +23,7 @@ line. The claude-cli provider instead uses Claude Code's existing sign-in.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import asyncio
 import json
 import logging
@@ -75,7 +76,9 @@ async def _load_target(
         rows = [row for row in rows if row.session_id == session_id]
     turns = [(row.role, row.content) for row in rows]
     facts = card.developer_behavior_facts if card else []
-    return card, facts, turns
+    names = Counter(row.project for row in rows if row.project)
+    project = names.most_common(1)[0][0] if names else None
+    return card, facts, turns, project
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -173,7 +176,7 @@ async def run(args: argparse.Namespace) -> int:
 
         for date, session_id in targets:
             label = date if session_id is None else f"{date} {session_id[-12:]}"
-            card, facts, turns = await _load_target(
+            card, facts, turns, project = await _load_target(
                 service, date, session_id, args.timezone
             )
             if card is None:
@@ -187,7 +190,8 @@ async def run(args: argparse.Namespace) -> int:
             if max_input_tokens is None:
                 max_input_tokens = 4_000 if args.provider == "mlx" else 12_000
             day = build_day_input(
-                date, facts, turns, max_input_tokens=max_input_tokens
+                date, facts, turns, max_input_tokens=max_input_tokens,
+                project=project,
             )
             estimated_input += day.estimated_tokens()
 
@@ -243,6 +247,7 @@ async def run(args: argparse.Namespace) -> int:
                         UpsertPreferenceRequest(
                             content=preference.content,
                             category=preference.category,
+                            project=preference.project,
                         )
                     )
                     written += 1
