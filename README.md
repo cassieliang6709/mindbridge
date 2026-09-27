@@ -687,6 +687,17 @@ Open [http://localhost:3000](http://localhost:3000), or
 npm run lint && npm run build
 ```
 
+## Running tests
+
+From the repository root:
+
+```bash
+pytest
+```
+
+This runs the full Python test suite, including the tests in `tests/`
+and the extraction pipeline tests in `extract/test_pipeline.py`.
+
 ### One-command local-loop proof
 
 For an interview or pre-release check, one command starts any missing local
