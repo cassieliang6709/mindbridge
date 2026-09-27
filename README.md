@@ -722,3 +722,7 @@ the MCP Python SDK, Docker Compose.
 **Local model** — Qwen2.5-3B-Instruct-4bit, MLX LoRA, `mlx_lm.server`.
 **Roadmap, not shipped** — export to a portable CUDA/vLLM serving target if the
 local pilot ever needs to run away from Apple silicon.
+
+## License
+
+[Apache License 2.0](LICENSE).

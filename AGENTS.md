@@ -5,9 +5,8 @@ get re-derived, re-argued, or silently reverted.
 
 ## The standard this project is held to
 
-MindBridge exists to survive an interview question. Its value is not that it
-works — it is that every claim on it can be reproduced on demand. That makes one
-rule non-negotiable:
+Every claim MindBridge makes must be reproducible on demand. That makes one rule
+non-negotiable:
 
 **Never show a number, a metric, or a generated artifact without also showing
 where it came from.**
