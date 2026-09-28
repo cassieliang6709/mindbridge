@@ -23,7 +23,7 @@ local memory store. Read the entire guide before changing anything.
 - Claude Code requires Pro, Max, Team, Enterprise or Console access; the Free
   plan currently does not include Claude Code.
 - MindBridge additionally needs Git, Python 3.11+, Docker and Ollama.
-- Enough local disk for Postgres images and `nomic-embed-text`.
+- Enough local disk for Postgres images and `bge-m3` (about 1.2 GB).
 
 The production proof on this site was reproduced on a MacBook Pro with Apple
 M1 Pro (8-core), 16 GB RAM, macOS 26.5.2 / arm64, Claude Code 2.1.226,
@@ -46,7 +46,7 @@ values, not minimum requirements.
    test -f .env || cp .env.example .env
    test -d .venv || python3 -m venv .venv
    .venv/bin/pip install -r requirements.txt
-   ollama pull nomic-embed-text
+   ollama pull bge-m3
    docker compose up -d db redis
    ```
 
@@ -216,7 +216,7 @@ Codex
 MindBridge MemoryService
   -> Postgres / pgvector
   -> Redis exact-query cache
-  -> Ollama nomic-embed-text
+  -> Ollama bge-m3
 ```
 
 The public MindBridge website uses synthetic data. Installing this local MCP is
