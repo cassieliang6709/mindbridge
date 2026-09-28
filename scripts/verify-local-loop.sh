@@ -96,10 +96,10 @@ if ! curl --silent --fail --max-time 2 http://127.0.0.1:11434/api/tags \
   curl --silent --fail http://127.0.0.1:11434/api/tags >"$TMP_DIR/ollama-tags.json"
 fi
 .venv/bin/python - "$TMP_DIR/ollama-tags.json" <<'PY' || \
-  fail "Ollama model nomic-embed-text is missing; run: ollama pull nomic-embed-text"
+  fail "Ollama model bge-m3 is missing; run: ollama pull bge-m3"
 import json, sys
 models = json.load(open(sys.argv[1], encoding="utf-8")).get("models", [])
-raise SystemExit(0 if any(m.get("name", "").startswith("nomic-embed-text") for m in models) else 1)
+raise SystemExit(0 if any(m.get("name", "").startswith("bge-m3") for m in models) else 1)
 PY
 
 if ! curl --silent --fail --max-time 2 http://127.0.0.1:8080/v1/models >/dev/null 2>&1; then

@@ -34,5 +34,5 @@ else
 fi
 
 echo "Start the local data layer: docker compose up -d db redis"
-echo "Ensure Ollama has the embedder: ollama pull nomic-embed-text"
+echo "Ensure Ollama has the embedder: ollama pull bge-m3"
 echo "Then restart Claude Code or open a fresh session and run: /mcp"
