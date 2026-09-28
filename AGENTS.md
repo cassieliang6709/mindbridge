@@ -72,6 +72,15 @@ the turns an incremental run happened to parse. Building from the delta rewrote
 a 683-turn card as a 223-turn one. This is why `session_turns` persists
 `project`, `git_branch` and `tool_names`.
 
+**An ANN index made write-time dedup silently stop.** `memory_vectors` had an
+ivfflat index (lists=100). At pgvector's default `probes=1` the planner used it
+for `nearest_open` even at 604 rows, searched about 1% of the table, and for 0 of
+the 96 rows that had a same-namespace, same-category twin at >=0.80 did it return
+that twin. So 139 duplicate pairs sat open. `probes=10` finds 89, `probes=100`
+finds all 96, and an exact scan takes about 1 ms. The index is gone. Do not add
+an ANN index back without measuring dedup recall on real rows first; "Postgres
+will sequential-scan small tables anyway" was the assumption, and it was wrong.
+
 **Day cards and session cards share one table.** Every read states a scope
 (`/summaries?scope=day|session|all`, default `day`). Without it the diary's day
 list fills with hundreds of session rows.

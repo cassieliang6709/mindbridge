@@ -144,10 +144,8 @@ async def run(args: argparse.Namespace) -> int:
                 await connection.execute(
                     "ALTER TABLE memory_vectors ALTER COLUMN embedding SET NOT NULL"
                 )
-                await connection.execute(
-                    "CREATE INDEX memory_vectors_embedding_idx ON memory_vectors "
-                    "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
-                )
+                # No ANN index is rebuilt: dedup needs an exact nearest
+                # neighbour. See the note in api/schema.sql.
         print(f"  re-embedded {len(vectors)} rows at {settings.embedding_dim} dims")
 
         if args.merge_duplicates and merges:
