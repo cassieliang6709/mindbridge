@@ -1,0 +1,872 @@
+{
+  "benchmark": "bilingual_retrieval",
+  "task": "known-item retrieval; one target memory per query; cosine over all memories",
+  "date": "2026-09-28T02:47:49+00:00",
+  "ollama_version": "0.32.5",
+  "dataset": {
+    "memories": 150,
+    "memories_zh": 18,
+    "queries": 50,
+    "conditions": [
+      "en",
+      "zh",
+      "mixed"
+    ],
+    "memories_sha256": "247b736b99fe280eda7a1a9e2ea4b1640c627fcad7ce1e410644bedcbc083cb8",
+    "queries_sha256": "4347503796468b1a23f67f13ff91f3164df033e7a34811b2bb711e166d39207b"
+  },
+  "runs": [
+    {
+      "model": "bge-m3",
+      "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab",
+      "prefix": false,
+      "dim": 1024,
+      "conditions": {
+        "en": {
+          "n": 50,
+          "recall@1": 0.88,
+          "recall@5": 0.96,
+          "recall@10": 0.98,
+          "mrr": 0.915,
+          "median_rank": 1.0
+        },
+        "zh": {
+          "n": 50,
+          "recall@1": 0.54,
+          "recall@5": 0.9,
+          "recall@10": 0.96,
+          "mrr": 0.685,
+          "median_rank": 1.0
+        },
+        "mixed": {
+          "n": 50,
+          "recall@1": 0.92,
+          "recall@5": 0.96,
+          "recall@10": 0.96,
+          "mrr": 0.939,
+          "median_rank": 1.0
+        }
+      },
+      "per_query_rank": {
+        "git-commit-per-feature": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "git-squash-before-merge": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "git-rebase-not-merge": {
+          "en": 4,
+          "zh": 3,
+          "mixed": 1
+        },
+        "git-imperative-messages": {
+          "en": 1,
+          "zh": 6,
+          "mixed": 1
+        },
+        "git-no-force-push-shared": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "git-small-prs": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 16
+        },
+        "test-mock-data-first": {
+          "en": 1,
+          "zh": 8,
+          "mixed": 1
+        },
+        "test-no-fake-data-demos": {
+          "en": 1,
+          "zh": 13,
+          "mixed": 1
+        },
+        "test-tdd-bugs": {
+          "en": 3,
+          "zh": 3,
+          "mixed": 1
+        },
+        "test-no-snapshot": {
+          "en": 1,
+          "zh": 5,
+          "mixed": 1
+        },
+        "test-integration-over-unit": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "test-deterministic-seeds": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "reply-conclusion-first": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "reply-detailed-when-learning": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "reply-shell-cwd": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "reply-tables": {
+          "en": 2,
+          "zh": 1,
+          "mixed": 1
+        },
+        "py-poetry": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 2
+        },
+        "py-pin-versions": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "py-type-hints": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "py-dataclasses": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "db-sqlite-prototypes": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "db-migrations-reviewed": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "db-soft-delete": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "db-backup-before-migrate": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "fe-tailwind": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "fe-no-redux": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "fe-accessibility-labels": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "ops-no-kubernetes-small": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "ops-staging-first": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "ops-friday-freeze": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "ops-rollback-plan": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "ops-structured-logs": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "cr-nit-prefix": {
+          "en": 1,
+          "zh": 4,
+          "mixed": 1
+        },
+        "cr-no-self-merge": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "cr-screenshots-ui": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "cr-ci-green": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "doc-adr": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "doc-changelog": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "sched-no-meetings-morning": {
+          "en": 2,
+          "zh": 2,
+          "mixed": 3
+        },
+        "sched-async-standup": {
+          "en": 1,
+          "zh": 7,
+          "mixed": 1
+        },
+        "tool-vscode-debug": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "style-early-return": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "style-no-bare-except": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 1
+        },
+        "style-fail-loudly": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "style-retry-backoff": {
+          "en": 30,
+          "zh": 37,
+          "mixed": 17
+        },
+        "sec-mask-secrets-in-logs": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "ml-baseline-first": {
+          "en": 1,
+          "zh": 4,
+          "mixed": 1
+        },
+        "ml-fixed-holdout": {
+          "en": 8,
+          "zh": 1,
+          "mixed": 1
+        },
+        "ml-report-n": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "pm-one-task-at-a-time": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        }
+      }
+    },
+    {
+      "model": "nomic-embed-text",
+      "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "prefix": false,
+      "dim": 768,
+      "conditions": {
+        "en": {
+          "n": 50,
+          "recall@1": 0.88,
+          "recall@5": 0.98,
+          "recall@10": 1.0,
+          "mrr": 0.925,
+          "median_rank": 1.0
+        },
+        "zh": {
+          "n": 50,
+          "recall@1": 0.02,
+          "recall@5": 0.02,
+          "recall@10": 0.04,
+          "mrr": 0.051,
+          "median_rank": 47.5
+        },
+        "mixed": {
+          "n": 50,
+          "recall@1": 0.7,
+          "recall@5": 0.86,
+          "recall@10": 0.86,
+          "mrr": 0.783,
+          "median_rank": 1.0
+        }
+      },
+      "per_query_rank": {
+        "git-commit-per-feature": {
+          "en": 1,
+          "zh": 32,
+          "mixed": 2
+        },
+        "git-squash-before-merge": {
+          "en": 1,
+          "zh": 18,
+          "mixed": 3
+        },
+        "git-rebase-not-merge": {
+          "en": 3,
+          "zh": 34,
+          "mixed": 1
+        },
+        "git-imperative-messages": {
+          "en": 1,
+          "zh": 80,
+          "mixed": 2
+        },
+        "git-no-force-push-shared": {
+          "en": 1,
+          "zh": 19,
+          "mixed": 1
+        },
+        "git-small-prs": {
+          "en": 2,
+          "zh": 49,
+          "mixed": 36
+        },
+        "test-mock-data-first": {
+          "en": 1,
+          "zh": 83,
+          "mixed": 1
+        },
+        "test-no-fake-data-demos": {
+          "en": 1,
+          "zh": 81,
+          "mixed": 1
+        },
+        "test-tdd-bugs": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "test-no-snapshot": {
+          "en": 1,
+          "zh": 47,
+          "mixed": 1
+        },
+        "test-integration-over-unit": {
+          "en": 1,
+          "zh": 93,
+          "mixed": 1
+        },
+        "test-deterministic-seeds": {
+          "en": 1,
+          "zh": 26,
+          "mixed": 1
+        },
+        "reply-conclusion-first": {
+          "en": 1,
+          "zh": 130,
+          "mixed": 1
+        },
+        "reply-detailed-when-learning": {
+          "en": 1,
+          "zh": 41,
+          "mixed": 18
+        },
+        "reply-shell-cwd": {
+          "en": 1,
+          "zh": 121,
+          "mixed": 1
+        },
+        "reply-tables": {
+          "en": 1,
+          "zh": 131,
+          "mixed": 134
+        },
+        "py-poetry": {
+          "en": 1,
+          "zh": 13,
+          "mixed": 2
+        },
+        "py-pin-versions": {
+          "en": 1,
+          "zh": 19,
+          "mixed": 1
+        },
+        "py-type-hints": {
+          "en": 1,
+          "zh": 67,
+          "mixed": 1
+        },
+        "py-dataclasses": {
+          "en": 1,
+          "zh": 50,
+          "mixed": 1
+        },
+        "db-sqlite-prototypes": {
+          "en": 1,
+          "zh": 122,
+          "mixed": 11
+        },
+        "db-migrations-reviewed": {
+          "en": 1,
+          "zh": 53,
+          "mixed": 1
+        },
+        "db-soft-delete": {
+          "en": 1,
+          "zh": 50,
+          "mixed": 1
+        },
+        "db-backup-before-migrate": {
+          "en": 1,
+          "zh": 81,
+          "mixed": 1
+        },
+        "fe-tailwind": {
+          "en": 1,
+          "zh": 14,
+          "mixed": 1
+        },
+        "fe-no-redux": {
+          "en": 1,
+          "zh": 7,
+          "mixed": 1
+        },
+        "fe-accessibility-labels": {
+          "en": 1,
+          "zh": 48,
+          "mixed": 1
+        },
+        "ops-no-kubernetes-small": {
+          "en": 1,
+          "zh": 20,
+          "mixed": 1
+        },
+        "ops-staging-first": {
+          "en": 1,
+          "zh": 41,
+          "mixed": 1
+        },
+        "ops-friday-freeze": {
+          "en": 1,
+          "zh": 80,
+          "mixed": 19
+        },
+        "ops-rollback-plan": {
+          "en": 1,
+          "zh": 41,
+          "mixed": 1
+        },
+        "ops-structured-logs": {
+          "en": 1,
+          "zh": 88,
+          "mixed": 1
+        },
+        "cr-nit-prefix": {
+          "en": 1,
+          "zh": 148,
+          "mixed": 2
+        },
+        "cr-no-self-merge": {
+          "en": 1,
+          "zh": 20,
+          "mixed": 1
+        },
+        "cr-screenshots-ui": {
+          "en": 4,
+          "zh": 19,
+          "mixed": 18
+        },
+        "cr-ci-green": {
+          "en": 1,
+          "zh": 12,
+          "mixed": 1
+        },
+        "doc-adr": {
+          "en": 1,
+          "zh": 85,
+          "mixed": 1
+        },
+        "doc-changelog": {
+          "en": 1,
+          "zh": 25,
+          "mixed": 1
+        },
+        "sched-no-meetings-morning": {
+          "en": 2,
+          "zh": 34,
+          "mixed": 20
+        },
+        "sched-async-standup": {
+          "en": 1,
+          "zh": 49,
+          "mixed": 1
+        },
+        "tool-vscode-debug": {
+          "en": 1,
+          "zh": 88,
+          "mixed": 2
+        },
+        "style-early-return": {
+          "en": 1,
+          "zh": 12,
+          "mixed": 1
+        },
+        "style-no-bare-except": {
+          "en": 1,
+          "zh": 36,
+          "mixed": 1
+        },
+        "style-fail-loudly": {
+          "en": 1,
+          "zh": 96,
+          "mixed": 1
+        },
+        "style-retry-backoff": {
+          "en": 7,
+          "zh": 63,
+          "mixed": 1
+        },
+        "sec-mask-secrets-in-logs": {
+          "en": 1,
+          "zh": 17,
+          "mixed": 1
+        },
+        "ml-baseline-first": {
+          "en": 1,
+          "zh": 89,
+          "mixed": 2
+        },
+        "ml-fixed-holdout": {
+          "en": 2,
+          "zh": 34,
+          "mixed": 1
+        },
+        "ml-report-n": {
+          "en": 1,
+          "zh": 150,
+          "mixed": 1
+        },
+        "pm-one-task-at-a-time": {
+          "en": 1,
+          "zh": 19,
+          "mixed": 2
+        }
+      }
+    },
+    {
+      "model": "nomic-embed-text",
+      "digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+      "prefix": true,
+      "dim": 768,
+      "conditions": {
+        "en": {
+          "n": 50,
+          "recall@1": 0.88,
+          "recall@5": 0.98,
+          "recall@10": 1.0,
+          "mrr": 0.925,
+          "median_rank": 1.0
+        },
+        "zh": {
+          "n": 50,
+          "recall@1": 0.04,
+          "recall@5": 0.12,
+          "recall@10": 0.14,
+          "mrr": 0.098,
+          "median_rank": 50.0
+        },
+        "mixed": {
+          "n": 50,
+          "recall@1": 0.8,
+          "recall@5": 0.9,
+          "recall@10": 0.96,
+          "mrr": 0.849,
+          "median_rank": 1.0
+        }
+      },
+      "per_query_rank": {
+        "git-commit-per-feature": {
+          "en": 1,
+          "zh": 35,
+          "mixed": 1
+        },
+        "git-squash-before-merge": {
+          "en": 1,
+          "zh": 15,
+          "mixed": 1
+        },
+        "git-rebase-not-merge": {
+          "en": 3,
+          "zh": 46,
+          "mixed": 1
+        },
+        "git-imperative-messages": {
+          "en": 1,
+          "zh": 48,
+          "mixed": 1
+        },
+        "git-no-force-push-shared": {
+          "en": 1,
+          "zh": 16,
+          "mixed": 1
+        },
+        "git-small-prs": {
+          "en": 1,
+          "zh": 43,
+          "mixed": 47
+        },
+        "test-mock-data-first": {
+          "en": 1,
+          "zh": 57,
+          "mixed": 1
+        },
+        "test-no-fake-data-demos": {
+          "en": 1,
+          "zh": 71,
+          "mixed": 1
+        },
+        "test-tdd-bugs": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "test-no-snapshot": {
+          "en": 1,
+          "zh": 47,
+          "mixed": 1
+        },
+        "test-integration-over-unit": {
+          "en": 1,
+          "zh": 97,
+          "mixed": 1
+        },
+        "test-deterministic-seeds": {
+          "en": 1,
+          "zh": 44,
+          "mixed": 1
+        },
+        "reply-conclusion-first": {
+          "en": 2,
+          "zh": 135,
+          "mixed": 1
+        },
+        "reply-detailed-when-learning": {
+          "en": 1,
+          "zh": 42,
+          "mixed": 5
+        },
+        "reply-shell-cwd": {
+          "en": 1,
+          "zh": 118,
+          "mixed": 1
+        },
+        "reply-tables": {
+          "en": 1,
+          "zh": 134,
+          "mixed": 107
+        },
+        "py-poetry": {
+          "en": 1,
+          "zh": 3,
+          "mixed": 2
+        },
+        "py-pin-versions": {
+          "en": 1,
+          "zh": 15,
+          "mixed": 1
+        },
+        "py-type-hints": {
+          "en": 1,
+          "zh": 71,
+          "mixed": 1
+        },
+        "py-dataclasses": {
+          "en": 1,
+          "zh": 58,
+          "mixed": 1
+        },
+        "db-sqlite-prototypes": {
+          "en": 1,
+          "zh": 62,
+          "mixed": 1
+        },
+        "db-migrations-reviewed": {
+          "en": 1,
+          "zh": 70,
+          "mixed": 1
+        },
+        "db-soft-delete": {
+          "en": 1,
+          "zh": 52,
+          "mixed": 1
+        },
+        "db-backup-before-migrate": {
+          "en": 1,
+          "zh": 74,
+          "mixed": 1
+        },
+        "fe-tailwind": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "fe-no-redux": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "fe-accessibility-labels": {
+          "en": 1,
+          "zh": 122,
+          "mixed": 3
+        },
+        "ops-no-kubernetes-small": {
+          "en": 1,
+          "zh": 18,
+          "mixed": 1
+        },
+        "ops-staging-first": {
+          "en": 1,
+          "zh": 63,
+          "mixed": 1
+        },
+        "ops-friday-freeze": {
+          "en": 1,
+          "zh": 80,
+          "mixed": 6
+        },
+        "ops-rollback-plan": {
+          "en": 1,
+          "zh": 59,
+          "mixed": 1
+        },
+        "ops-structured-logs": {
+          "en": 2,
+          "zh": 52,
+          "mixed": 1
+        },
+        "cr-nit-prefix": {
+          "en": 1,
+          "zh": 146,
+          "mixed": 1
+        },
+        "cr-no-self-merge": {
+          "en": 1,
+          "zh": 41,
+          "mixed": 1
+        },
+        "cr-screenshots-ui": {
+          "en": 1,
+          "zh": 22,
+          "mixed": 9
+        },
+        "cr-ci-green": {
+          "en": 1,
+          "zh": 2,
+          "mixed": 1
+        },
+        "doc-adr": {
+          "en": 1,
+          "zh": 41,
+          "mixed": 1
+        },
+        "doc-changelog": {
+          "en": 1,
+          "zh": 55,
+          "mixed": 1
+        },
+        "sched-no-meetings-morning": {
+          "en": 2,
+          "zh": 47,
+          "mixed": 8
+        },
+        "sched-async-standup": {
+          "en": 1,
+          "zh": 56,
+          "mixed": 1
+        },
+        "tool-vscode-debug": {
+          "en": 1,
+          "zh": 61,
+          "mixed": 1
+        },
+        "style-early-return": {
+          "en": 1,
+          "zh": 1,
+          "mixed": 1
+        },
+        "style-no-bare-except": {
+          "en": 1,
+          "zh": 41,
+          "mixed": 1
+        },
+        "style-fail-loudly": {
+          "en": 1,
+          "zh": 115,
+          "mixed": 1
+        },
+        "style-retry-backoff": {
+          "en": 4,
+          "zh": 37,
+          "mixed": 2
+        },
+        "sec-mask-secrets-in-logs": {
+          "en": 1,
+          "zh": 9,
+          "mixed": 1
+        },
+        "ml-baseline-first": {
+          "en": 1,
+          "zh": 91,
+          "mixed": 2
+        },
+        "ml-fixed-holdout": {
+          "en": 6,
+          "zh": 94,
+          "mixed": 1
+        },
+        "ml-report-n": {
+          "en": 1,
+          "zh": 150,
+          "mixed": 1
+        },
+        "pm-one-task-at-a-time": {
+          "en": 1,
+          "zh": 19,
+          "mixed": 1
+        }
+      }
+    }
+  ]
+}

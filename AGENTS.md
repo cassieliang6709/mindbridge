@@ -38,6 +38,7 @@ In practice:
 | T3 dedup threshold under nomic-embed-text | 0.80 | 170 rows read individually | superseded by bge-m3 |
 | Chinese-query recall@5 over English T3, nomic → bge-m3 | **0.10 → 0.925** | 40 queries, 604 open rows | private query set, 2026-09-27 |
 | Semantic query cache viability | **not viable** | 27 queries / 54 requests | `cacheCostSaving` stays null |
+| Chinese-query recall@5 over English memories (synthetic, public) | nomic-embed-text **0.02** → bge-m3 **0.90** | 50 targets in 150 memories | `evals/bilingual_retrieval.py` → `evals/bilingual_retrieval_results.json` |
 
 **84.7% (n=281) is the bar** stage two's fine-tuned model must clear, judged by the
 same rule: **first reply only, repairs excluded.** Changing that definition to
