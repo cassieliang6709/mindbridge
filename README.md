@@ -683,6 +683,18 @@ Open [http://localhost:3000](http://localhost:3000), or
 
 ## Validate
 
+Run the complete Python suite from the repository root, including the offline
+extraction-contract checks:
+
+```bash
+uv run --with-requirements requirements.txt python -m unittest discover -s tests
+```
+
+The Python tests use local fixtures and a mocked HTTP transport; they do not
+require Postgres, a model service, or API credentials.
+
+Run the web lint and production build separately:
+
 ```bash
 npm run lint && npm run build
 ```
