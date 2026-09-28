@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from itertools import pairwise
 
 import httpx
 import numpy as np
@@ -68,7 +69,10 @@ def main() -> int:
     primary, other = args.models
 
     ids, contents = asyncio.run(load_open_rows())
-    sims = {model: (lambda d: d @ d.T)(embed(contents, model)) for model in args.models}
+    sims = {}
+    for model in args.models:
+        vectors = embed(contents, model)
+        sims[model] = vectors @ vectors.T
     i, j = np.triu_indices(len(ids), k=1)
     print(f"open rows: {len(ids)}   pairs: {len(i)}")
 
@@ -76,7 +80,7 @@ def main() -> int:
         values = sims[model][i, j]
         counts = "  ".join(
             f"{lo:.2f}-{min(hi, 1.0):.2f}:{int(((values >= lo) & (values < hi)).sum())}"
-            for lo, hi in zip(BANDS, BANDS[1:])
+            for lo, hi in pairwise(BANDS)
         )
         print(f"{model:>18}  {counts}")
 
