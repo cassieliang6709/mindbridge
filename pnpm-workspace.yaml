@@ -1,3 +1,7 @@
 allowBuilds:
   sharp: true
   unrs-resolver: true
+# Security floors for transitive dependencies of next (Dependabot alerts).
+overrides:
+  postcss: '>=8.5.28'
+  sharp: '>=0.35.5'
