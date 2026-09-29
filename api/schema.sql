@@ -142,6 +142,64 @@ CREATE TABLE IF NOT EXISTS pattern_candidates (
 CREATE INDEX IF NOT EXISTS pattern_candidates_status_created_idx
     ON pattern_candidates (status, created_at DESC);
 
+-- Model-extracted T3 suggestions stay outside the searchable memory table until
+-- the user accepts their wording.  This is deliberately separate from
+-- pattern_candidates: a one-session operational preference and a repeated,
+-- evidence-backed reflective pattern have different admission rules.
+CREATE TABLE IF NOT EXISTS memory_candidates (
+    id                    BIGSERIAL PRIMARY KEY,
+    content               TEXT        NOT NULL,
+    namespace             TEXT        NOT NULL DEFAULT 'operational'
+                                      CHECK (namespace IN ('operational', 'reflective')),
+    category              TEXT        NOT NULL DEFAULT 'other',
+    project               TEXT,
+    confidence            REAL        NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+    evidence              TEXT,
+    source_period         TEXT        NOT NULL,
+    source_session_id     TEXT,
+    source_summary_id     BIGINT      REFERENCES rolling_summaries (id) ON DELETE SET NULL,
+    source_receipt        JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    dedupe_key            TEXT        NOT NULL UNIQUE,
+    status                TEXT        NOT NULL DEFAULT 'pending'
+                                      CHECK (status IN ('pending', 'confirmed', 'edited', 'rejected')),
+    resolution_note       TEXT,
+    confirmed_memory_id   BIGINT      REFERENCES memory_vectors (id) ON DELETE SET NULL,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE memory_candidates
+    ADD COLUMN IF NOT EXISTS evidence TEXT;
+
+CREATE INDEX IF NOT EXISTS memory_candidates_status_created_idx
+    ON memory_candidates (status, created_at DESC);
+
+-- Redis carries only a small job id.  Postgres is the source of truth for the
+-- requested work and its receipt, so a broker outage can be repaired by
+-- re-dispatching queued or stale rows without reconstructing the request.
+CREATE TABLE IF NOT EXISTS background_jobs (
+    job_id            TEXT        PRIMARY KEY,
+    kind              TEXT        NOT NULL CHECK (kind IN ('extract_card', 'retrieval_eval')),
+    idempotency_key   TEXT        NOT NULL UNIQUE,
+    status            TEXT        NOT NULL DEFAULT 'queued'
+                                  CHECK (status IN ('queued', 'running', 'retrying', 'succeeded', 'failed')),
+    payload           JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    result            JSONB,
+    attempt           INTEGER     NOT NULL DEFAULT 0,
+    max_attempts      INTEGER     NOT NULL DEFAULT 3 CHECK (max_attempts >= 1),
+    celery_task_id    TEXT,
+    error_code        TEXT,
+    error_message     TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at        TIMESTAMPTZ,
+    heartbeat_at      TIMESTAMPTZ,
+    finished_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS background_jobs_status_created_idx
+    ON background_jobs (status, created_at DESC);
+
 -- --- Path A ingestion cursors -------------------------------------------
 -- One row per transcript file. bytes_read is a resume point: these logs are
 -- append-only, so re-running ingestion only reads what was added since. If a
@@ -176,3 +234,78 @@ CREATE INDEX IF NOT EXISTS session_turns_created_idx
 CREATE UNIQUE INDEX IF NOT EXISTS session_turns_source_key_idx
     ON session_turns (source_key)
     WHERE source_key IS NOT NULL;
+
+-- --- Agent Runtime v0: append-only run ledger -------------------------
+-- This ledger records what a harness decided and observed. It does not execute
+-- tools. What it does provide is the idempotency key a caller needs in order to
+-- ask, before executing, whether this exact call already happened — see the
+-- `idempotency_key` column and the partial unique index below.
+CREATE TABLE IF NOT EXISTS agent_runtime_runs (
+    run_id               TEXT        PRIMARY KEY,
+    task                 TEXT        NOT NULL,
+    status               TEXT        NOT NULL DEFAULT 'running'
+                                      CHECK (status IN ('running', 'completed', 'failed')),
+    next_sequence        BIGINT      NOT NULL DEFAULT 0,
+    model_provider       TEXT,
+    model                TEXT,
+    prompt_version       TEXT,
+    tool_schema_version  TEXT,
+    budgets              JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    metadata             JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at         TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS agent_runtime_events (
+    run_id          TEXT        NOT NULL REFERENCES agent_runtime_runs (run_id) ON DELETE CASCADE,
+    sequence        BIGINT      NOT NULL,
+    event_id        TEXT        NOT NULL,
+    event_type      TEXT        NOT NULL CHECK (event_type IN (
+        'run_input',
+        'model_requested',
+        'model_completed',
+        'tool_requested',
+        'tool_approved',
+        'tool_started',
+        'tool_completed',
+        'tool_failed',
+        -- A call that was interrupted after starting, on a tool that has not
+        -- declared itself safe to re-run. The runtime stops here on purpose
+        -- rather than guessing whether the side effect landed.
+        'tool_needs_review',
+        'checkpoint',
+        'run_completed',
+        'run_failed'
+    )),
+    payload         JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    payload_sha256  TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, sequence),
+    UNIQUE (run_id, event_id)
+);
+
+-- Identity of a tool call: sha256 over run, tool name, tool schema version and
+-- canonical arguments. Carried by the tool_* events of one logical call, NULL
+-- everywhere else.
+ALTER TABLE agent_runtime_events
+    ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+
+-- The guarantee. A key may be *started* more than once — a retry after a
+-- recorded failure is a new attempt, not a duplicate effect — but it can be
+-- *completed* only once. If a bug ever lets a completed side effect run again,
+-- this index turns it into a loud constraint violation instead of a second
+-- silent write to the user's memory.
+--
+-- The index is a backstop, not the mechanism: `claim_tool_call` reads this key
+-- before executing, and that read is what normally prevents the second run.
+CREATE UNIQUE INDEX IF NOT EXISTS agent_runtime_events_effect_once_idx
+    ON agent_runtime_events (idempotency_key)
+    WHERE idempotency_key IS NOT NULL AND event_type = 'tool_completed';
+
+CREATE INDEX IF NOT EXISTS agent_runtime_events_idempotency_idx
+    ON agent_runtime_events (idempotency_key, sequence)
+    WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS agent_runtime_events_type_created_idx
+    ON agent_runtime_events (event_type, created_at DESC);

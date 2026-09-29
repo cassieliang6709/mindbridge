@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from api.cache import SemanticLookup
+from api.memory.vector_store import VectorMemoryStore
 from api.models import TemporalQueryRequest
 from api.service import MemoryService
 
@@ -51,6 +52,15 @@ class _FakeVectors:
         return []
 
 
+class _CapturingPool:
+    def __init__(self) -> None:
+        self.fetch_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def fetch(self, query: str, *args: object) -> list[object]:
+        self.fetch_calls.append((query, args))
+        return []
+
+
 class TemporalProjectTests(unittest.IsolatedAsyncioTestCase):
     async def test_project_partitions_cache_and_vector_search(self) -> None:
         cache = _FakeCache()
@@ -76,8 +86,52 @@ class TemporalProjectTests(unittest.IsolatedAsyncioTestCase):
             [call["project"] for call in vectors.search_calls], ["alpha", "beta"]
         )
 
+    async def test_ranking_mode_partitions_cache_and_reaches_vector_search(self) -> None:
+        cache = _FakeCache()
+        vectors = _FakeVectors()
+        service = object.__new__(MemoryService)
+        service.cache = cache
+        service.embedder = _FakeEmbedder()
+        service.vectors = vectors
+        service.settings = SimpleNamespace(decay_rate_per_day=0.01)
+
+        await service.temporal_query(
+            TemporalQueryRequest(query_string="same query", ranking_mode="temporal")
+        )
+        await service.temporal_query(
+            TemporalQueryRequest(query_string="same query", ranking_mode="semantic")
+        )
+
+        self.assertNotEqual(cache.keys[0], cache.keys[1])
+        self.assertNotEqual(cache.fingerprints[0], cache.fingerprints[1])
+        self.assertEqual(
+            [call["ranking_mode"] for call in vectors.search_calls],
+            ["temporal", "semantic"],
+        )
+
+    async def test_vector_store_uses_distinct_semantic_score_branch(self) -> None:
+        pool = _CapturingPool()
+        store = VectorMemoryStore(
+            pool,  # type: ignore[arg-type]
+            decay_rate_per_day=0.01,
+            dedup_threshold=0.9,
+            superseded_penalty=0.5,
+        )
+
+        await store.search([1.0, 0.0], ranking_mode="temporal", record_access=False)
+        await store.search([1.0, 0.0], ranking_mode="semantic", record_access=False)
+
+        temporal_query, temporal_args = pool.fetch_calls[0]
+        semantic_query, semantic_args = pool.fetch_calls[1]
+        self.assertIn("CASE WHEN $11::text = 'semantic'", temporal_query)
+        self.assertEqual(temporal_query, semantic_query)
+        self.assertEqual(temporal_args[-1], "temporal")
+        self.assertEqual(semantic_args[-1], "semantic")
+
     def test_project_is_optional_and_defaults_to_no_downweighting(self) -> None:
-        self.assertIsNone(TemporalQueryRequest(query_string="same query").project)
+        request = TemporalQueryRequest(query_string="same query")
+        self.assertIsNone(request.project)
+        self.assertEqual(request.ranking_mode, "temporal")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,8 @@
-"""Postgres access. Raw SQL over asyncpg, so the decay formula stays readable."""
+"""Postgres access. Raw SQL over asyncpg, so the decay formula stays readable.
+
+中文说明：通过 asyncpg 直接执行原生 SQL 访问 Postgres,不使用 ORM,
+这样衰减公式(decay formula)等计算逻辑可以直接读懂 SQL 而不必翻译 ORM 语法。
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,19 @@ SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
 async def create_pool(settings: Settings) -> asyncpg.Pool:
+    """Open an asyncpg connection pool sized from settings.
+
+    中文：根据配置创建 asyncpg 连接池。
+
+    Args:
+        settings: Provides the database DSN and min/max pool size.
+
+    Returns:
+        A ready-to-use asyncpg connection pool. 一个可直接使用的 asyncpg 连接池。
+
+    Raises:
+        RuntimeError: If asyncpg unexpectedly returns no pool. 若 asyncpg 异常地未返回连接池,则抛出。
+    """
     pool = await asyncpg.create_pool(
         dsn=str(settings.database_url),
         min_size=settings.db_pool_min,
@@ -26,7 +43,14 @@ async def create_pool(settings: Settings) -> asyncpg.Pool:
 
 
 async def apply_schema(pool: asyncpg.Pool, settings: Settings) -> None:
-    """Idempotent DDL. Safe to run on every boot."""
+    """Idempotent DDL. Safe to run on every boot.
+
+    中文：幂等的建表/建索引 DDL,每次启动时执行都是安全的。
+
+    Args:
+        pool: The connection pool to run the DDL through. 用于执行 DDL 的连接池。
+        settings: Supplies the embedding dimension substituted into the schema.
+    """
     ddl = SCHEMA_PATH.read_text(encoding="utf-8").replace(
         "{embedding_dim}", str(settings.embedding_dim)
     )
@@ -41,6 +65,17 @@ async def _assert_vector_width(pool: asyncpg.Pool, settings: Settings) -> None:
 
     CREATE TABLE IF NOT EXISTS silently keeps the old width, which would
     otherwise surface much later as an opaque insert error.
+
+    中文：当配置的向量维度与数据库中实际列的宽度不一致时,立即明确报错。
+    因为 CREATE TABLE IF NOT EXISTS 不会修改已存在表的列宽,若不在这里检查,
+    问题会推迟到很久之后的一次插入失败时才以一个含义不明的错误出现。
+
+    Args:
+        pool: The connection pool used to inspect the live column. 用于查询实际列宽的连接池。
+        settings: Supplies the expected embedding dimension. 提供期望的向量维度。
+
+    Raises:
+        RuntimeError: If the live column width disagrees with ``settings.embedding_dim``.
     """
     async with pool.acquire() as connection:
         width = await connection.fetchval(

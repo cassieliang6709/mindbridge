@@ -73,6 +73,13 @@ _service_lock = asyncio.Lock()
 
 
 async def _get_service() -> MemoryService:
+    """Lazily create and return the process-wide MemoryService.
+
+    中文：按需创建并返回进程内共享的 MemoryService。
+
+    Returns:
+        The singleton service shared by all MCP tool calls.
+    """
     global _service
     if _service is None:
         async with _service_lock:
@@ -111,6 +118,7 @@ mcp = FastMCP(
 
 def _format_daily_card(card: SummaryCard) -> str:
     """Human-readable, source-labelled T2 context for an MCP client."""
+    # 中文：将 T2 卡渲染成 MCP 客户端可读且带来源标签的上下文。
     lines = [
         f"T2 day card [{card.id}] · {card.period}",
         f"generated_by={card.generated_by}",
@@ -131,6 +139,10 @@ def _format_daily_card(card: SummaryCard) -> str:
 
 
 def _format_memory(record: MemoryWithDecay) -> str:
+    """Render one T3 record as a concise, auditable MCP block.
+
+    中文：将一条 T3 记录渲染为简洁、可审计的 MCP 文本块。
+    """
     status = (
         f"superseded at {record.valid_at.date().isoformat()}"
         if record.valid_at is not None
@@ -150,12 +162,20 @@ def _format_memory(record: MemoryWithDecay) -> str:
 
 
 def _mutation_summary(action: str, target_id: int, replacement_id: int) -> str:
+    """Render the stable one-line receipt for a memory mutation.
+
+    中文：渲染记忆变更操作稳定的一行回执。
+    """
     return (
         f"memory_garden action={action} · target={target_id} · replacement={replacement_id}"
     )
 
 
 def _format_pattern(candidate: PatternCandidate) -> str:
+    """Render a reviewable Pattern Candidate with all available evidence.
+
+    中文：渲染包含全部现有证据、可供审核的 Pattern Candidate。
+    """
     lines = [
         f"Pattern Candidate [{candidate.id}] · status={candidate.status}",
         f"hypothesis={candidate.description}",
@@ -194,6 +214,7 @@ async def get_daily_card(period: str = "latest") -> str:
         The card id, date, reproducible summary, observed facts, open threads and
         optional model narrative. This is read-only and does not change T3.
     """
+    # 中文：读取一张 T2 日卡；只读，不会修改 T3。
     service = await _get_service()
     if period.strip().lower() == "latest":
         cards = await service.list_summaries(limit=1, scope="day")
@@ -222,6 +243,7 @@ async def review_long_term_memory(
         A newest-first audit list with memory ids, categories, learned dates and
         validity state. Listing is read-only and does not bump access counts.
     """
+    # 中文：按最新优先列出可审计 T3 记录；只读且不增加访问次数。
     safe_limit = max(1, min(limit, 100))
     service = await _get_service()
     namespaces = None if namespace == "all" else [namespace]
@@ -241,6 +263,7 @@ async def review_long_term_memory(
 @mcp.tool()
 async def get_memory_record(memory_id: int) -> str:
     """Read one T3 row by id for a precise audit reference."""
+    # 中文：按 ID 读取一条 T3 记录，供精确审计引用。
     service = await _get_service()
     try:
         return _format_memory(await service.get_memory(memory_id))
@@ -251,6 +274,7 @@ async def get_memory_record(memory_id: int) -> str:
 @mcp.tool()
 async def archive_memory(memory_id: int) -> str:
     """Close one open memory row without deleting history."""
+    # 中文：关闭一条有效记忆记录，但不删除历史。
     service = await _get_service()
     try:
         result = await service.archive_memory(memory_id)
@@ -262,6 +286,7 @@ async def archive_memory(memory_id: int) -> str:
 @mcp.tool()
 async def edit_memory(memory_id: int, content: str, decay_factor: float | None = None) -> str:
     """Replace one open memory with user-confirmed edited wording."""
+    # 中文：使用用户确认的编辑文本替换一条有效记忆。
     service = await _get_service()
     try:
         result = await service.edit_memory(
@@ -293,6 +318,7 @@ async def propose_pattern(
     Repetition alone is not confirmation: include counter-evidence when it
     exists, and do not use diagnostic or negative personality labels.
     """
+    # 中文：创建待用户审核的模式候选项；至少需要两个日期的三条具体观察。
     service = await _get_service()
     candidate = await service.propose_pattern(
         PatternCandidateCreate(
@@ -312,6 +338,7 @@ async def review_pattern_candidates(
     limit: int = 20,
 ) -> str:
     """List reflective hypotheses and their evidence without changing T3."""
+    # 中文：列出反思型假设及其证据，不会修改 T3。
     service = await _get_service()
     safe_limit = max(1, min(limit, 100))
     records = await service.list_patterns(
@@ -335,6 +362,7 @@ async def resolve_pattern(
     Confirm/edit creates a user-confirmed reflective T3 memory; reject keeps the
     receipt but writes no memory. Never call this from model inference alone.
     """
+    # 中文：确认或编辑会创建用户确认过的反思型 T3；拒绝只保留回执，不写入记忆。
     service = await _get_service()
     candidate = await service.resolve_pattern(
         candidate_id,
@@ -355,6 +383,7 @@ async def resolve_pattern(
 @mcp.tool()
 async def get_daily_review(period: str = "latest") -> str:
     """Review one day across T2, both T3 lanes and pending Pattern Candidates."""
+    # 中文：跨 T2、两类 T3 与待处理 Pattern Candidate 审核一天的记录。
     service = await _get_service()
     review = await service.daily_review(period)
     lines = [f"# MindBridge Daily Review · {review.period}"]
@@ -407,6 +436,7 @@ async def upsert_preference(
     Returns:
         Which action was taken (inserted / refreshed / superseded) and why.
     """
+    # 中文：写入持久偏好并说明插入、刷新或替换的原因。
     service = await _get_service()
     result = await service.upsert_preference(
         UpsertPreferenceRequest(
@@ -459,6 +489,7 @@ async def temporal_query(
     Returns:
         A formatted context block, one memory per line with id, date and score.
     """
+    # 中文：按时间衰减排序检索记忆，返回带 ID、日期和分数的提示词上下文。
     windows: dict[str, int | None] = {
         "7d": 7,
         "30d": 30,
@@ -485,6 +516,10 @@ async def temporal_query(
 
 
 def main() -> None:
+    """Run the MindBridge MCP server over stdio.
+
+    中文：通过标准输入输出运行 MindBridge MCP 服务。
+    """
     mcp.run(transport="stdio")
 
 

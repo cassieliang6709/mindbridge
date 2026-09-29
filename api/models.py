@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MemoryNamespace = Literal["operational", "reflective"]
+RankingMode = Literal["temporal", "semantic"]
 
 MemoryCategory = Literal[
     "coding_style",
@@ -38,6 +39,7 @@ REFLECTIVE_CATEGORIES = frozenset(
 UpsertAction = Literal["inserted", "refreshed", "superseded"]
 
 # Day cards and session cards share one table, so every read says which it wants.
+# 中文：日卡与会话卡共用一张表，读取时必须明确所需范围，避免混入另一类卡片。
 CardScope = Literal["day", "session", "all"]
 PatternStatus = Literal["pending", "confirmed", "edited", "rejected"]
 PatternDecision = Literal["confirm", "edit", "reject"]
@@ -46,6 +48,8 @@ MemoryMutationAction = Literal["archive", "edit"]
 
 class Turn(BaseModel):
     """One raw prompt or response in T1."""
+
+    # 中文：T1 中的一条原始提示、回复或工具调用记录。
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -63,6 +67,8 @@ class Turn(BaseModel):
 
 
 class TurnCreate(BaseModel):
+    # Input accepted when an API client appends one T1 turn.
+    # 中文：API 客户端向 T1 追加单条记录时使用的输入模型。
     role: Literal["user", "assistant", "tool"]
     content: str = Field(min_length=1)
     tool: str | None = Field(
@@ -74,6 +80,8 @@ class TurnCreate(BaseModel):
 class SessionBuffer(BaseModel):
     """T1 read model: the live window plus what has aged out of it."""
 
+    # 中文：T1 的读取结果，包含当前窗口与已被挤出窗口的记录数量。
+
     session_id: str
     window: int
     turns: list[Turn]
@@ -83,6 +91,8 @@ class SessionBuffer(BaseModel):
 
 class SummaryCard(BaseModel):
     """T2: one structured card per day."""
+
+    # 中文：T2 的结构化摘要卡；日卡与会话卡都使用该模型。
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -107,6 +117,8 @@ class SummaryCard(BaseModel):
 
 
 class SummaryCardCreate(BaseModel):
+    # Input used to create or replace a T2 summary card.
+    # 中文：创建或替换 T2 摘要卡时使用的输入模型。
     period: str = Field(description="e.g. 2026-08-04 or 2026-W32.")
     summary: str = Field(min_length=1)
     developer_behavior_facts: list[str] = Field(default_factory=list)
@@ -115,6 +127,8 @@ class SummaryCardCreate(BaseModel):
 
 class NarrativeUpdate(BaseModel):
     """M2 output layered onto an existing rule-based card."""
+
+    # 中文：叠加到既有规则摘要卡上的 M2 模型输出。
 
     period: str
     narrative: str = Field(min_length=1)
@@ -130,6 +144,8 @@ class NarrativeUpdate(BaseModel):
 
 class MemoryRecord(BaseModel):
     """T3 row without its embedding."""
+
+    # 中文：不含向量嵌入的 T3 记忆记录。
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -157,6 +173,10 @@ class MemoryRecord(BaseModel):
 
     @property
     def is_open(self) -> bool:
+        """Whether this memory has not been closed or superseded.
+
+        中文：判断该记忆是否仍然有效；有效记忆的 ``valid_at`` 为空。
+        """
         return self.valid_at is None
 
 
@@ -168,12 +188,16 @@ class MemoryWithDecay(MemoryRecord):
     were a relevance ranking.
     """
 
+    # 中文：时间线读取的 T3 记录，只携带时间衰减权重，不携带查询相关度。
+
     age_days: float
     decay_multiplier: float
 
 
 class MemoryHit(MemoryRecord):
     """A T3 row with the scores that put it in the result set."""
+
+    # 中文：检索命中的 T3 记录，附带余弦相似度、时间衰减与最终分数。
 
     cosine_similarity: float
     age_days: float
@@ -182,6 +206,8 @@ class MemoryHit(MemoryRecord):
 
 
 class UpsertPreferenceRequest(BaseModel):
+    # Input for deduplicated creation or refresh of a durable T3 preference.
+    # 中文：创建或刷新持久 T3 偏好时使用的去重写入输入模型。
     content: str = Field(min_length=1)
     namespace: MemoryNamespace = "operational"
     category: MemoryCategory = "other"
@@ -210,6 +236,14 @@ class UpsertPreferenceRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_namespace_boundary(self) -> "UpsertPreferenceRequest":
+        """Keep operational and reflective memory categories separate.
+
+        中文：校验操作型与反思型记忆的类别边界，并要求反思型记忆获得用户确认。
+
+        Raises:
+            ValueError: If a category belongs to the wrong namespace or a
+                reflective memory lacks explicit user confirmation.
+        """
         if self.namespace == "reflective":
             if self.category not in REFLECTIVE_CATEGORIES:
                 raise ValueError("reflective memory needs a reflective category")
@@ -221,6 +255,8 @@ class UpsertPreferenceRequest(BaseModel):
 
 
 class UpsertPreferenceResult(BaseModel):
+    # Result returned after a T3 preference was inserted, refreshed, or superseded.
+    # 中文：T3 偏好插入、刷新或替换后的返回结果。
     action: UpsertAction
     record: MemoryRecord
     matched_id: int | None = None
@@ -230,6 +266,8 @@ class UpsertPreferenceResult(BaseModel):
 
 class MemoryMutationRequest(BaseModel):
     """Mutable memory operations for the Memory Garden path."""
+
+    # 中文：Memory Garden 中归档或编辑记忆的请求。
 
     action: MemoryMutationAction
     content: str | None = Field(default=None, min_length=1)
@@ -245,6 +283,13 @@ class MemoryMutationRequest(BaseModel):
 
     @model_validator(mode="after")
     def require_content_for_edit(self) -> "MemoryMutationRequest":
+        """Require replacement wording for an edit operation.
+
+        中文：编辑操作必须提供替换后的记忆内容。
+
+        Raises:
+            ValueError: If an edit request has no replacement content.
+        """
         if self.action == "edit" and not self.content:
             raise ValueError("edit action requires content")
         return self
@@ -257,6 +302,8 @@ class MemoryMutationResult(BaseModel):
     new one. For `archive`, both ids are the same.
     """
 
+    # 中文：归档或编辑操作的结果；编辑会生成新记录，归档不会。
+
     action: MemoryMutationAction
     target_id: int
     replacement_id: int
@@ -265,6 +312,8 @@ class MemoryMutationResult(BaseModel):
 
 
 class TemporalQueryRequest(BaseModel):
+    # Input for a ranked T3 recall query.
+    # 中文：带排序的 T3 回忆检索请求模型。
     query_string: str = Field(min_length=1)
     top_k: int = Field(default=5, ge=1, le=50)
     time_window_days: int | None = Field(
@@ -282,9 +331,19 @@ class TemporalQueryRequest(BaseModel):
         ),
     )
     include_superseded: bool = False
+    ranking_mode: RankingMode = Field(
+        default="temporal",
+        description=(
+            "'temporal' combines semantic relevance with time decay; "
+            "'semantic' ranks by cosine relevance while retaining decay fields "
+            "for audit."
+        ),
+    )
 
 
 class TemporalQueryResult(BaseModel):
+    # Ranked T3 recall response, including a prompt-ready context block.
+    # 中文：T3 检索响应，包含排序后的命中结果和可直接放入提示词的上下文文本。
     query: str
     hits: list[MemoryHit]
     decay_rate_per_day: float
@@ -297,6 +356,8 @@ class TemporalQueryResult(BaseModel):
 class PatternEvidence(BaseModel):
     """One dated, inspectable observation supporting or challenging a pattern."""
 
+    # 中文：支持或反驳某个模式的一条可追溯、带日期的观察记录。
+
     source_date: date
     summary: str = Field(min_length=4, max_length=400)
     source_id: str | None = Field(
@@ -308,6 +369,8 @@ class PatternEvidence(BaseModel):
 class PatternCandidateCreate(BaseModel):
     """An inference waiting for the user, never a durable trait by itself."""
 
+    # 中文：等待用户确认的推断，单独存在时绝不是持久的人格结论。
+
     description: str = Field(min_length=10, max_length=500)
     supporting_evidence: list[PatternEvidence] = Field(min_length=3, max_length=10)
     counter_evidence: list[PatternEvidence] = Field(default_factory=list, max_length=10)
@@ -316,6 +379,14 @@ class PatternCandidateCreate(BaseModel):
 
     @model_validator(mode="after")
     def require_repeated_dates(self) -> "PatternCandidateCreate":
+        """Require evidence across dates and discard blank contexts.
+
+        中文：要求证据来自多个日期，并移除空白的上下文描述。
+
+        Raises:
+            ValueError: If evidence covers fewer than two dates or no nonblank
+                context remains.
+        """
         dates = {item.source_date for item in self.supporting_evidence}
         if len(dates) < 2:
             raise ValueError("a pattern candidate needs evidence from at least two dates")
@@ -326,6 +397,8 @@ class PatternCandidateCreate(BaseModel):
 
 
 class PatternCandidate(BaseModel):
+    # Stored, reviewable reflective inference; it is not T3 memory by itself.
+    # 中文：已保存、可供审核的反思型推断；它本身不是 T3 记忆。
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -342,12 +415,21 @@ class PatternCandidate(BaseModel):
 
 
 class PatternDecisionRequest(BaseModel):
+    # User decision that confirms, edits, or rejects a Pattern Candidate.
+    # 中文：用户对 Pattern Candidate 进行确认、编辑或拒绝的决定。
     decision: PatternDecision
     confirmed_content: str | None = Field(default=None, min_length=10, max_length=500)
     resolution_note: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def require_edited_wording(self) -> "PatternDecisionRequest":
+        """Require user-approved wording when the decision is an edit.
+
+        中文：当决定为编辑时，必须提供用户确认过的新表述。
+
+        Raises:
+            ValueError: If an edit decision has no confirmed replacement text.
+        """
         if self.decision == "edit" and not self.confirmed_content:
             raise ValueError("edit requires confirmed_content")
         return self
@@ -355,6 +437,8 @@ class PatternDecisionRequest(BaseModel):
 
 class DailyReview(BaseModel):
     """One review surface joining T2, both T3 lanes and pending inference."""
+
+    # 中文：汇总 T2、两类 T3 和记忆模式候选项的一日审核视图。
 
     period: str
     card: SummaryCard | None

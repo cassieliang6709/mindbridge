@@ -1,4 +1,8 @@
-"""T2 — rolling summary: one structured card per day or week."""
+"""T2 — rolling summary: one structured card per day, session, or week.
+
+中文说明：T2 将可重建的结构化摘要按日期或会话保存为卡片；模型叙事是附加层，
+不会覆盖规则生成的事实来源。
+"""
 
 from __future__ import annotations
 
@@ -17,8 +21,13 @@ _CARD_COLUMNS = """
 
 
 def _row_to_card(row: asyncpg.Record) -> SummaryCard:
+    """Decode a database row into a validated SummaryCard.
+
+    中文：在存储边界解码 JSON 字段，并构造经过校验的 SummaryCard。
+    """
     data = dict(row)
     # asyncpg returns jsonb as a string unless a codec is registered.
+    # 中文：未注册 codec 时 asyncpg 返回 JSON 字符串，因此在这里统一解码。
     for key in ("developer_behavior_facts", "open_threads"):
         value = data.get(key)
         if isinstance(value, str):
@@ -27,11 +36,23 @@ def _row_to_card(row: asyncpg.Record) -> SummaryCard:
 
 
 class RollingSummaryStore:
+    """Persist structured T2 cards without hiding their reproducible source.
+
+    中文：持久化结构化 T2 卡片，同时保留可复现的规则摘要与模型叙事边界。
+    """
+
     def __init__(self, pool: asyncpg.Pool) -> None:
+        """Create the store around an open PostgreSQL connection pool.
+
+        中文：使用已打开的 PostgreSQL 连接池创建 T2 存储。
+        """
         self._pool = pool
 
     async def upsert(self, card: SummaryCardCreate) -> SummaryCard:
-        """Re-running a period's batch replaces that card instead of duplicating it."""
+        """Replace a period's card when its deterministic batch is rerun.
+
+        中文：同一日期或会话的确定性批处理重跑时替换原卡，而不是生成重复卡片。
+        """
         facts = json.dumps(card.developer_behavior_facts, ensure_ascii=False)
         tokens = count_tokens(card.summary) + sum(
             count_tokens(fact) for fact in card.developer_behavior_facts
@@ -76,6 +97,9 @@ class RollingSummaryStore:
         diary's day list with hundreds of session rows. The caller now has to
         say which it wants, and "day" is the default because that is the
         product surface.
+
+        中文：日卡与会话卡共享一张表，因此调用方必须明确 scope；默认 day
+        保护日记产品面，避免数百张会话卡混入日卡列表。
         """
         rows = await self._pool.fetch(
             f"""
@@ -97,6 +121,10 @@ class RollingSummaryStore:
         return [_row_to_card(row) for row in rows]
 
     async def get(self, period: str, session_id: str | None = None) -> SummaryCard | None:
+        """Read one day or session card by its stable scope key.
+
+        中文：按 period 与可选 session_id 组成的稳定作用域键读取一张卡片。
+        """
         row = await self._pool.fetchrow(
             f"""
             SELECT {_CARD_COLUMNS}
@@ -110,7 +138,10 @@ class RollingSummaryStore:
         return _row_to_card(row) if row is not None else None
 
     async def known_periods(self) -> list[str]:
-        """Every period that has a day card, oldest first."""
+        """Return every period with a day card, oldest first.
+
+        中文：返回所有存在日卡的时间段，按最早到最新排序。
+        """
         rows = await self._pool.fetch(
             """
             SELECT period FROM rolling_summaries
@@ -126,6 +157,9 @@ class RollingSummaryStore:
         The rule-based `summary` is left untouched. If extraction is later found
         to be wrong, or the model is swapped, the reproducible headline is still
         there — and `generated_by` tells the UI which of the two it is showing.
+
+        中文：模型叙事只作为附加层写入，规则生成的 summary 保持不变；即使模型
+        或抽取结果后来被证明有误，产品仍能展示可复现标题及其生成来源。
         """
         facts = json.dumps(update.highlights, ensure_ascii=False)
         threads = json.dumps(update.open_threads, ensure_ascii=False)

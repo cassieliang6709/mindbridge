@@ -57,6 +57,9 @@ venv/
 # build metadata from `pip install -e .`
 *.egg-info/
 
+# Local Claude agent checkouts; project-level .claude config may still be tracked.
+/.claude/worktrees/
+
 # M2 training data: contains transcript excerpts from the local machine
 train/dataset/*.jsonl
 # Manual backup copies carry the same private transcript excerpts.
@@ -77,3 +80,11 @@ backups/
 
 # Local archive/reactivation bookkeeping — not portfolio content
 REACTIVATED.md
+
+# Personal material and evals that quote private T3 rows; never publish.
+interview-prep/
+docs/MINDBRIDGE_RESUME_MOCK_INTERVIEW.md
+output/
+draft_*_folder/
+evals/retrieval_quality_cases.json
+evals/retrieval_quality_latest.json

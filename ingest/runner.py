@@ -10,6 +10,19 @@
     python -m ingest.runner --full
 
     python -m ingest.runner --status
+
+中文说明：Path A 的命令行入口——读取本地 AI 编程工具的转录文件，写入 T1
+表，并生成 T2 日卡片。
+    # 只看看会发生什么，不实际改动任何数据
+    python -m ingest.runner --dry-run --since 7d
+
+    # 摄取上次运行之后新增的内容
+    python -m ingest.runner
+
+    # 从头重新读取（对话轮有唯一键，所以不会产生重复数据）
+    python -m ingest.runner --full
+
+    python -m ingest.runner --status
 """
 
 from __future__ import annotations
@@ -54,6 +67,23 @@ _SINCE_RE = re.compile(r"^(\d+)([dhw])$")
 
 
 def parse_since(value: str | None) -> datetime | None:
+    """Turn a `--since` CLI value like "7d" into an absolute UTC cutoff.
+
+    中文：把类似 "7d" 这样的 `--since` 命令行参数值，转换成一个绝对的 UTC
+    时间截止点。
+
+    Args:
+        value: Duration string ("24h", "7d", "2w"), "all", or None.
+            时长字符串（如 "24h"、"7d"、"2w"）、"all"，或 None。
+
+    Returns:
+        The UTC cutoff datetime, or None meaning "no lower bound".
+        UTC 截止时间；返回 None 表示"没有下限，全量"。
+
+    Raises:
+        argparse.ArgumentTypeError: If value doesn't match the expected pattern.
+            如果 value 不符合预期格式。
+    """
     if value is None or value == "all":
         return None
     match = _SINCE_RE.match(value)
@@ -82,6 +112,42 @@ async def ingest(
     tz_name: str,
     roots: dict[str, Path],
 ) -> tuple[list[DayDigest], dict[str, int]]:
+    """Read new turns from every source, write them to T1, and rebuild T2 day cards.
+
+    中文：从每个来源读取新的对话轮，写入 T1 表，并重新生成 T2 日卡片。
+
+    Args:
+        service: Running MemoryService used for all database access.
+            用于所有数据库访问的、已启动的 MemoryService。
+        sources: Which readers to run (e.g. claude-code, codex-cli).
+            要运行哪些读取器（来源）。
+        since: Only consider turns at or after this UTC instant; None means
+            no lower bound. 只处理这个 UTC 时刻之后的对话轮；None 表示不设下限。
+        dry_run: If True, parse and summarize but write nothing.
+            如果为 True，只解析和汇总，不写入任何数据。
+        full: If True, ignore saved cursors and re-read every file from byte 0.
+            如果为 True，忽略已保存的游标，从每个文件的字节 0 处重新读取。
+        include_tool_io: Whether to store tool_result / function_call_output text.
+            是否存储工具返回结果的文本内容。
+        include_thinking: Whether to store assistant "thinking"/"reasoning" blocks.
+            是否存储 assistant 的"思考"/"推理"内容块。
+        include_sidechains: Whether to store subagent (sidechain) turns.
+            是否存储子代理（sidechain）产生的对话轮。
+        write_summaries: Whether to write T2 day (and session) cards at all.
+            是否要写入 T2 日卡片（及会话卡片）。
+        session_cards: Whether to also write one card per qualifying session.
+            是否额外为符合条件的每个会话写一张卡片。
+        min_session_turns: Sessions with fewer turns than this get no session card.
+            轮数少于这个值的会话不会生成会话卡片。
+        tz_name: IANA timezone name used for day boundaries and formatting.
+            用于划分日期边界和格式化的 IANA 时区名称。
+        roots: Optional override of each source's default transcript directory.
+            对各来源默认转录目录的可选覆盖。
+
+    Returns:
+        A tuple of (day digests rebuilt or parsed this run, running totals).
+        一个 (本次生成/解析出的日卡片列表, 运行总计数字典) 元组。
+    """
     cursors = CursorStore(service._pool)  # noqa: SLF001 - same package boundary
     totals = {
         "files_seen": 0,
@@ -109,6 +175,8 @@ async def ingest(
             except OSError:
                 continue
             # A file whose last write predates the window has nothing to add.
+            # 中文：如果一个文件最后写入的时间早于本次要求的时间窗口，那它就
+            # 不会有新东西可摄取，直接跳过。
             if since is not None:
                 mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
                 if mtime < since:
@@ -121,6 +189,10 @@ async def ingest(
 
             # A file written to in the last minute may have a response still
             # streaming; hold its trailing group back for the next run.
+            # 中文：如果一个文件在过去一分钟内刚被写过，说明它很可能还有回复
+            # 在流式写入中；这种情况下，把最后那一组记录留到下一次运行再处理
+            # （见 assume_complete 参数），避免把"写了一半"的回复当成完整
+            # 数据存进去。
             quiet_for = datetime.now(timezone.utc) - datetime.fromtimestamp(
                 stat.st_mtime, tz=timezone.utc
             )
@@ -177,12 +249,19 @@ async def ingest(
 
     if dry_run:
         # Nothing was written, so the only thing to describe is what was parsed.
+        # 中文：因为什么都没有写入数据库，所以能描述的只有这次解析出来的内容。
         return digest_for_period(all_turns, tz_name), totals
 
     # Rebuild each touched day from the DATABASE, over the whole local day.
     # Building it from `all_turns` would describe only what this run parsed, so
     # an incremental run would overwrite a full card with a partial one — a
     # nightly job would shrink every card it touched.
+    # 中文：重新构建每一个被涉及到的日卡片时，一定要基于数据库、覆盖"整个本地
+    # 日"的数据，而不能只用 `all_turns`（这次运行解析出的内容）——否则一次
+    # 增量运行就会用"只包含这次新解析内容"的不完整卡片，去覆盖掉之前完整的
+    # 日卡片。举例说明这个坑有多真实：曾经把一张 683 轮的日卡片，被一次增量
+    # 运行错误地重写成了只有 223 轮的卡片。夜间定时任务如果这样跑，会把它碰
+    # 到的每一张卡片都"缩水"。
     dates = sorted(group_by_day(all_turns, tz))
     digests: list[DayDigest] = []
     for date in dates:
@@ -205,6 +284,10 @@ async def ingest(
             # and its day card always agree. These exist mainly to multiply the
             # extraction targets: one card per day caps the training set at one
             # pair per day, which is far too slow to reach a usable fine-tune.
+            # 中文：会话卡片是用同一天的行数据构建的，这样会话卡片和日卡片
+            # 的口径永远一致、不会打架。之所以要有会话卡片，主要是为了扩充
+            # 抽取目标数量——如果只有日卡片，训练集每天最多只能产出一条
+            # 样本，速度太慢，不足以支撑一次可用的微调（fine-tune）。
             if session_cards:
                 for session_id, session_digest in session_digests(
                     day_turns, tz, min_session_turns
@@ -223,6 +306,14 @@ async def ingest(
 
 
 async def show_status(service: MemoryService) -> None:
+    """Print per-source ingestion progress for `--status`.
+
+    中文：为 `--status` 命令打印每个来源的摄取进度。
+
+    Args:
+        service: Running MemoryService used to reach the cursor store.
+            用于访问游标存储的、已启动的 MemoryService。
+    """
     cursors = CursorStore(service._pool)  # noqa: SLF001
     rows = await cursors.summary()
     if not rows:
@@ -238,6 +329,14 @@ async def show_status(service: MemoryService) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the `python -m ingest.runner` CLI argument parser.
+
+    中文：构建 `python -m ingest.runner` 命令行工具的参数解析器。
+
+    Returns:
+        Configured ArgumentParser with every flag this CLI supports.
+        配置好的 ArgumentParser，包含该命令行工具支持的所有参数。
+    """
     parser = argparse.ArgumentParser(
         prog="python -m ingest.runner",
         description="Ingest local AI coding-tool transcripts into MindBridge.",
@@ -338,6 +437,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def main_async(argv: list[str] | None = None) -> int:
+    """Parse CLI args and dispatch to the requested Path A action.
+
+    中文：解析命令行参数，并分发到对应的 Path A 操作（摄取、查看状态、重建
+    卡片，或重置游标）。
+
+    Args:
+        argv: Argument list to parse; None means use `sys.argv`.
+            要解析的参数列表；None 表示使用 `sys.argv`。
+
+    Returns:
+        Process exit code: 0 on success, 2 on a CLI argument error.
+        进程退出码：0 表示成功，2 表示命令行参数错误。
+    """
     args = build_parser().parse_args(argv)
     try:
         since = parse_since(args.since)
@@ -362,6 +474,8 @@ async def main_async(argv: list[str] | None = None) -> int:
             if dates == ["all"]:
                 # Every day that has turns, so a digest-rule change can be
                 # applied to the whole history without re-reading transcripts.
+                # 中文：取出所有存在对话轮的日期，这样修改了摘要生成规则之后，
+                # 可以对整个历史应用新规则，而不需要重新读取原始转录文件。
                 dates = await service.summaries.known_periods()
             rebuilt: list[DayDigest] = []
             sessions_written = 0
@@ -451,6 +565,10 @@ async def main_async(argv: list[str] | None = None) -> int:
 
 
 def main() -> None:
+    """Console-script entry point: run the async CLI and exit with its code.
+
+    中文：控制台脚本入口——运行异步 CLI，并以它返回的状态码退出进程。
+    """
     raise SystemExit(asyncio.run(main_async()))
 
 

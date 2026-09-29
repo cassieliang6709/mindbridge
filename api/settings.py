@@ -1,4 +1,7 @@
-"""Configuration. Every value is read from the environment or a .env file."""
+"""Configuration defaults, overridable by the environment or a .env file.
+
+中文说明：配置项在代码中提供安全默认值，也可由环境变量或 .env 文件覆盖。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +15,10 @@ EmbeddingProvider = Literal["openai", "gemini", "ollama", "hashing"]
 
 
 class Settings(BaseSettings):
+    # All runtime configuration, grouped by concern. This must remain a comment:
+    # Pydantic copies class docstrings into JSON schema descriptions.
+    # 中文：记忆引擎的全部运行时配置，按基础设施、嵌入、抽取、记忆行为与缓存
+    # 分组。这里必须使用普通注释；Pydantic 会把 class docstring 写入 JSON schema。
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="MINDBRIDGE_",
@@ -58,6 +65,13 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     gemini_api_key: str | None = None
     embedding_timeout_seconds: float = 30.0
+
+    # --- local agent ------------------------------------------------------
+    agent_model: str = Field(
+        default="qwen2.5:7b",
+        description="Local Ollama model used by the agent tool-selection loop.",
+    )
+    agent_timeout_seconds: float = 90.0
 
     # --- local extraction -------------------------------------------------
     mlx_url: str = Field(
@@ -167,7 +181,13 @@ class Settings(BaseSettings):
     )
 
     def masked(self) -> dict[str, object]:
-        """Settings safe to log or expose on /healthz."""
+        """Settings safe to log or expose on /healthz.
+
+        中文：仅返回可安全记录或通过 /healthz 暴露的配置，不包含密钥。
+
+        Returns:
+            A dictionary of non-sensitive setting values.
+        """
         return {
             "embedding_provider": self.embedding_provider,
             "embedding_model": self.embedding_model,
@@ -183,4 +203,11 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Build and cache the process-wide Settings instance.
+
+    中文：构建并缓存进程级唯一的 Settings 实例。
+
+    Returns:
+        The Settings object reused for the lifetime of the process.
+    """
     return Settings()

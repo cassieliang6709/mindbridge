@@ -31,6 +31,11 @@ a false merge silently closes a distinct preference and is hard to notice later.
 Merging keeps the OLDEST row as canonical. created_at is what decay is measured
 from, and it should reflect when the preference was first learned, not when it
 was last rephrased — the same reasoning refresh() uses.
+
+中文说明：用当前嵌入模型重新计算 T3 向量,并可选择合并新模型识别出的重复项。
+旧 hashing 兜底无法可靠发现语义重复,因此它只能修复以后写入的数据;本脚本处理
+已经存在的记录。合并时保留最早的记录,因为 ``created_at`` 决定偏好衰减的起点,
+应该反映第一次学到它的时间,而不是最近一次改写的时间。
 """
 
 from __future__ import annotations
@@ -45,6 +50,17 @@ from api.settings import get_settings
 
 
 async def run(args: argparse.Namespace) -> int:
+    """Re-embed T3 rows and optionally merge newly detected duplicates.
+
+    中文：重新计算 T3 每条记录的向量,并按需合并当前模型识别出的重复项。
+
+    Args:
+        args: Parsed CLI flags, including apply mode and duplicate threshold.
+            解析后的命令行参数,包括执行模式和重复阈值。
+
+    Returns:
+        Process exit code. 进程退出码。
+    """
     settings = get_settings()
     embedder = build_embedder(settings)
     pool = await create_pool(settings)
@@ -82,6 +98,7 @@ async def run(args: argparse.Namespace) -> int:
             print(f"  {min(start + batch, len(contents))}/{len(contents)}")
 
         # --- find duplicates at the new threshold ---------------------------
+        # 中文：按新嵌入和阈值寻找重复项。
         open_rows = [r for r in rows if r["valid_at"] is None]
         merges: list[tuple[int, int, float]] = []  # (duplicate, canonical, cos)
         canonical_of: dict[int, int] = {}
@@ -117,6 +134,7 @@ async def run(args: argparse.Namespace) -> int:
             return 0
 
         # --- rewrite the column --------------------------------------------
+        # 中文：先创建并填充新列,再替换旧列,避免向量维度变化时留下半成品数据。
         print("\nrewriting the vector column…")
         async with pool.acquire() as connection:
             async with connection.transaction():
@@ -181,6 +199,13 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    """Parse CLI flags and run the re-embedding workflow.
+
+    中文：解析命令行参数并运行重新嵌入流程。
+
+    Returns:
+        Process exit code. 进程退出码。
+    """
     parser = argparse.ArgumentParser(prog="python -m scripts.reembed")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

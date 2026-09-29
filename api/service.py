@@ -16,6 +16,13 @@ import asyncpg
 from .cache import QueryCache
 from .db import apply_schema, create_pool
 from .embeddings import Embedder, build_embedder
+from .memory_candidates import (
+    MemoryCandidate,
+    MemoryCandidateCreate,
+    MemoryCandidateDecisionRequest,
+    MemoryCandidateStatus,
+    MemoryCandidateStore,
+)
 from .memory import (
     PatternCandidateStore,
     RollingSummaryStore,
@@ -58,6 +65,11 @@ _CONFLICT_THRESHOLD = 0.75
 
 
 class MemoryService:
+    """Coordinate T1, T2, T3, cache, and pattern stores for both transports.
+
+    中文：为 REST API 与 MCP 协调 T1、T2、T3、缓存及模式候选存储。
+    """
+
     def __init__(
         self,
         pool: asyncpg.Pool,
@@ -65,6 +77,16 @@ class MemoryService:
         cache: QueryCache,
         settings: Settings,
     ) -> None:
+        """Wire already-created dependencies into one memory service.
+
+        中文：将已创建的依赖组装为一个统一的记忆服务。
+
+        Args:
+            pool: Open PostgreSQL connection pool.
+            embedder: Embedding implementation used for T3 similarity work.
+            cache: Query cache shared by temporal retrieval.
+            settings: Validated runtime configuration.
+        """
         self.settings = settings
         self.embedder = embedder
         self.cache = cache
@@ -72,6 +94,7 @@ class MemoryService:
         self.turns = SessionBufferStore(pool, settings.session_buffer_window)
         self.summaries = RollingSummaryStore(pool)
         self.patterns = PatternCandidateStore(pool)
+        self.candidates = MemoryCandidateStore(pool)
         self.vectors = VectorMemoryStore(
             pool,
             decay_rate_per_day=settings.decay_rate_per_day,
@@ -83,6 +106,17 @@ class MemoryService:
 
     @classmethod
     async def start(cls, settings: Settings | None = None) -> Self:
+        """Create all runtime dependencies and return a ready service.
+
+        中文：创建运行时依赖并返回可立即使用的服务。
+
+        Args:
+            settings: Optional validated settings; reads configured defaults when
+                omitted.
+
+        Returns:
+            A service with its database pool, embedder, and cache connected.
+        """
         settings = settings or get_settings()
         if settings.embedding_provider == "hashing":
             logger.warning(
@@ -97,10 +131,22 @@ class MemoryService:
         return cls(pool, embedder, cache, settings)
 
     async def close(self) -> None:
+        """Close cache and database resources owned by this service.
+
+        中文：关闭该服务持有的缓存、嵌入连接与数据库资源。
+        """
         await self.cache.close()
+        # The embedder now keeps its HTTP connection open across calls, so it
+        # has to be closed with everything else or the loop shuts down with a
+        # live transport attached.
+        await self.embedder.aclose()
         await self._pool.close()
 
     async def health(self) -> dict[str, object]:
+        """Report dependency health and safe runtime configuration.
+
+        中文：报告依赖健康状态及已脱敏的运行配置。
+        """
         await self._pool.fetchval("SELECT 1")
         return {
             "status": "ok",
@@ -114,14 +160,26 @@ class MemoryService:
     # --- T1 ---------------------------------------------------------------
 
     async def add_turn(self, session_id: str, turn: TurnCreate) -> Turn:
+        """Append one raw T1 turn to a session.
+
+        中文：向一个会话追加一条原始 T1 记录。
+        """
         return await self.turns.append(session_id, turn)
 
     async def read_buffer(self, session_id: str) -> SessionBuffer:
+        """Read the bounded live T1 window for a session.
+
+        中文：读取一个会话受窗口限制的实时 T1 内容。
+        """
         return await self.turns.read(session_id)
 
     # --- T2 ---------------------------------------------------------------
 
     async def write_summary(self, card: SummaryCardCreate) -> SummaryCard:
+        """Create or replace a structured T2 summary card.
+
+        中文：创建或替换结构化 T2 摘要卡。
+        """
         return await self.summaries.upsert(card)
 
     async def list_summaries(
@@ -130,12 +188,17 @@ class MemoryService:
         limit: int = 30,
         scope: CardScope = "day",
     ) -> list[SummaryCard]:
+        """List T2 cards within an explicit scope.
+
+        中文：在明确范围内列出 T2 摘要卡。
+        """
         return await self.summaries.list_cards(session_id, limit, scope)
 
     async def get_summary(
         self, period: str, session_id: str | None = None
     ) -> SummaryCard | None:
         """Read one T2 card without exposing the store through a transport."""
+        # 中文：读取一张 T2 卡，不让传输层直接依赖底层存储。
         return await self.summaries.get(period, session_id)
 
     # --- T3 ---------------------------------------------------------------
@@ -150,6 +213,7 @@ class MemoryService:
         3. At or above dedup_threshold: refresh it, insert nothing.
         4. Otherwise insert, and optionally close a conflicting neighbour.
         """
+        # 中文：先嵌入并去重，再按阈值刷新、插入或替换 T3 偏好。
         [embedding] = await self.embedder.embed([request.content])
         match = await self.vectors.nearest_open(
             embedding, request.namespace, request.category
@@ -217,6 +281,10 @@ class MemoryService:
         include_superseded: bool = True,
         namespaces: list[MemoryNamespace] | None = None,
     ) -> list[MemoryWithDecay]:
+        """List newest T3 memories without semantic ranking.
+
+        中文：按最新优先列出 T3 记忆，不进行语义排序。
+        """
         return await self.vectors.list_recent(
             limit=limit,
             include_superseded=include_superseded,
@@ -224,9 +292,17 @@ class MemoryService:
         )
 
     async def get_memory(self, memory_id: int) -> MemoryWithDecay:
+        """Read one T3 memory with its current decay weight.
+
+        中文：读取一条 T3 记忆及其当前时间衰减权重。
+        """
         return await self.vectors.get_with_decay(memory_id)
 
     async def archive_memory(self, memory_id: int) -> MemoryMutationResult:
+        """Close one T3 memory without deleting its audit history.
+
+        中文：关闭一条 T3 记忆，但不删除其审计历史。
+        """
         record = await self.vectors.archive(memory_id)
         await self.cache.invalidate_namespace(_QUERY_NAMESPACE)
         return MemoryMutationResult(
@@ -242,6 +318,10 @@ class MemoryService:
         memory_id: int,
         request: MemoryMutationRequest,
     ) -> MemoryMutationResult:
+        """Replace one open T3 memory using confirmed edited wording.
+
+        中文：使用确认后的编辑文本替换一条仍有效的 T3 记忆。
+        """
         existing = await self.vectors.get(memory_id)
         if existing.valid_at is not None:
             raise ValueError(f"memory {memory_id} is already closed")
@@ -264,10 +344,61 @@ class MemoryService:
 
     # --- reflective candidates ------------------------------------------
 
+    async def propose_memory_candidate(
+        self, draft: MemoryCandidateCreate
+    ) -> MemoryCandidate:
+        """Stage model-extracted memory outside T3 until explicit review."""
+        return await self.candidates.create(draft)
+
+    async def list_memory_candidates(
+        self,
+        *,
+        status: MemoryCandidateStatus | None = "pending",
+        limit: int = 50,
+    ) -> list[MemoryCandidate]:
+        return await self.candidates.list(status=status, limit=limit)
+
+    async def resolve_memory_candidate(
+        self,
+        candidate_id: int,
+        request: MemoryCandidateDecisionRequest,
+    ) -> MemoryCandidate:
+        """Promote confirmed wording into T3, or reject it without a T3 write."""
+        candidate = await self.candidates.get(candidate_id)
+        if candidate is None or candidate.status != "pending":
+            raise KeyError(f"memory candidate {candidate_id} not found or resolved")
+        if request.decision == "reject":
+            return await self.candidates.resolve(
+                candidate_id,
+                status="rejected",
+                content=candidate.content,
+                resolution_note=request.resolution_note,
+                confirmed_memory_id=None,
+            )
+
+        content = (request.confirmed_content or candidate.content).strip()
+        outcome = await self.upsert_preference(
+            UpsertPreferenceRequest(
+                content=content,
+                namespace=candidate.namespace,
+                category=candidate.category,
+                project=candidate.project,
+                confirmed_by_user=candidate.namespace == "reflective",
+            )
+        )
+        return await self.candidates.resolve(
+            candidate_id,
+            status="edited" if request.decision == "edit" else "confirmed",
+            content=content,
+            resolution_note=request.resolution_note,
+            confirmed_memory_id=outcome.record.id,
+        )
+
     async def propose_pattern(
         self, draft: PatternCandidateCreate
     ) -> PatternCandidate:
         """Keep a repeated-behaviour inference outside T3 until confirmation."""
+        # 中文：重复行为推断在用户确认前只保存在 T3 之外的候选区。
         return await self.patterns.create(draft)
 
     async def list_patterns(
@@ -276,6 +407,10 @@ class MemoryService:
         status: PatternStatus | None = "pending",
         limit: int = 20,
     ) -> list[PatternCandidate]:
+        """List reflective inference candidates by lifecycle status.
+
+        中文：按生命周期状态列出反思型推断候选项。
+        """
         return await self.patterns.list(status=status, limit=limit)
 
     async def resolve_pattern(
@@ -284,6 +419,7 @@ class MemoryService:
         request: PatternDecisionRequest,
     ) -> PatternCandidate:
         """Confirm/edit into reflective T3, or reject without writing memory."""
+        # 中文：确认或编辑后写入反思型 T3；拒绝时不写入任何记忆。
         candidate = await self.patterns.get(candidate_id)
         if candidate is None or candidate.status != "pending":
             raise KeyError(f"pattern candidate {candidate_id} not found or resolved")
@@ -316,6 +452,7 @@ class MemoryService:
 
     async def daily_review(self, period: str = "latest") -> DailyReview:
         """Join one T2 card, today's T3 writes and pending reflective candidates."""
+        # 中文：汇总一张 T2 卡、当天的两类 T3 写入与待处理的反思候选项。
         if period.strip().lower() == "latest":
             cards = await self.list_summaries(limit=1, scope="day")
             card = cards[0] if cards else None
@@ -353,6 +490,10 @@ class MemoryService:
     async def list_turns_between(
         self, start: datetime, end: datetime, limit: int = 40
     ) -> tuple[list[Turn], int]:
+        """Read a paged T1 time range and its unpaged total count.
+
+        中文：读取分页后的 T1 时间范围记录及该范围内的总数。
+        """
         turns = await self.turns.list_between(start, end, limit)
         total = await self.turns.count_between(start, end)
         return turns, total
@@ -370,6 +511,7 @@ class MemoryService:
         interesting number is how often it served the *wrong* question, and that
         needs the similarity and the query it matched against.
         """
+        # 中文：按 LRU、精确缓存、语义邻居和 Postgres 的顺序查询；trace 仅供评估。
         # Everything except the query text. Semantic matching may be fuzzy about
         # the question; it must never be fuzzy about these, because they decide
         # what a result contains rather than what it is about.
@@ -380,6 +522,7 @@ class MemoryService:
             "n": sorted(request.namespaces) if request.namespaces else None,
             "p": request.project,
             "s": request.include_superseded,
+            "r": request.ranking_mode,
         }
         normalised_query = request.query_string.strip().lower()
         cache_key = QueryCache.key(_QUERY_NAMESPACE, {"q": normalised_query, **params})
@@ -421,6 +564,7 @@ class MemoryService:
             namespaces=request.namespaces,
             include_superseded=request.include_superseded,
             project=request.project,
+            ranking_mode=request.ranking_mode,
         )
         result = TemporalQueryResult(
             query=request.query_string,
@@ -445,6 +589,7 @@ def format_context(hits: list[MemoryHit]) -> str:
     Every line carries provenance — id, date, score — so the model can cite what
     it used and a reader can tell a fresh preference from a decayed one.
     """
+    # 中文：将命中结果渲染为模型可直接使用、且带溯源信息的紧凑上下文块。
     if not hits:
         return "No stored memory matched this query."
     lines = ["Known T3 memories (most relevant first):"]
@@ -464,4 +609,8 @@ def format_context(hits: list[MemoryHit]) -> str:
 
 
 def context_token_count(hits: list[MemoryHit]) -> int:
+    """Count tokens in the prompt-ready representation of memory hits.
+
+    中文：统计记忆命中结果渲染为提示词上下文后的 token 数量。
+    """
     return count_tokens(format_context(hits))

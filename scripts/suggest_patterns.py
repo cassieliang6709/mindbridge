@@ -3,6 +3,9 @@
 This is deterministic: it scans existing day cards only and looks for repeated
 factual observations. It never writes reflective T3 directly, it only creates
 Pattern Candidates (pending) for later confirmation.
+
+中文说明：从 T2 日卡中确定性地生成 Pattern Candidate。它只查找重复出现的事实性
+观察,绝不会直接写入带反思性质的 T3;生成的候选仍需后续确认。
 """
 
 from __future__ import annotations
@@ -31,6 +34,10 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 @dataclass(frozen=True)
 class _Evidence:
+    """One pattern-relevant observation extracted from a T2 fact line.
+
+    中文：从 T2 日卡事实行提取的一条模式相关观察。
+    """
     period: str
     source_id: str
     summary: str
@@ -38,10 +45,31 @@ class _Evidence:
 
 
 def _normalise(text: str) -> str:
+    """Lowercase text and collapse non-alphanumeric characters to spaces.
+
+    中文：把文本转小写,并将非字母数字字符合并为空格,便于稳定比较。
+
+    Args:
+        text: Raw text to normalize. 待归一化的原始文本。
+
+    Returns:
+        Normalized, trimmed text. 归一化且去掉首尾空白后的文本。
+    """
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
 def parse_period_for_sort(period: str) -> datetime | None:
+    """Parse a day-card period into a sortable UTC datetime.
+
+    中文：把日卡日期解析为可排序的 UTC datetime。
+
+    Args:
+        period: ``YYYY-MM-DD`` period string. ``YYYY-MM-DD`` 格式的日期。
+
+    Returns:
+        A timezone-aware datetime, or None for an invalid date.
+        带时区的 datetime;日期非法时返回 None。
+    """
     if not _DATE_RE.match(period):
         return None
     try:
@@ -51,6 +79,20 @@ def parse_period_for_sort(period: str) -> datetime | None:
 
 
 def parse_since(value: str | None) -> datetime | None:
+    """Parse a ``--since`` value such as ``7d`` or ``48h`` into a cutoff.
+
+    中文：把 ``7d``、``48h`` 等 ``--since`` 参数解析为截止时间。
+
+    Args:
+        value: Raw ``--since`` value, or None. 原始参数值,或 None。
+
+    Returns:
+        None for no cutoff, otherwise a UTC cutoff datetime.
+        不限时间时返回 None;否则返回 UTC 截止时间。
+
+    Raises:
+        ValueError: If the value has an unsupported format. 参数格式不受支持时抛出。
+    """
     if value is None or value == "all":
         return None
     match = _SINCE_RE.match(value)
@@ -65,6 +107,18 @@ def parse_since(value: str | None) -> datetime | None:
 
 
 def _split_list_field(value: str) -> list[str]:
+    """Split a summarized fact field into cleaned item strings.
+
+    中文：把汇总后的事实字段拆成清理过的条目字符串。
+
+    Args:
+        value: A possibly labeled, comma-separated fact line. 可能带标签的
+            逗号分隔事实行。
+
+    Returns:
+        Clean non-empty items without the ``(+N more)`` suffix.
+        去掉 ``(+N more)`` 尾巴后的非空条目。
+    """
     cleaned = value.split(":", 1)[1] if ":" in value else value
     cleaned = cleaned.strip()
     if not cleaned:
@@ -76,6 +130,7 @@ def _split_list_field(value: str) -> list[str]:
         if not part:
             continue
         # Remove the '+N more' tail from deterministic summaries.
+        # 中文：移除确定性汇总为了简洁附加的 "+N more" 尾巴。
         part = re.sub(r"\(\+\d+\s+more\)", "", part).strip()
         if part:
             out.append(part)
@@ -83,6 +138,18 @@ def _split_list_field(value: str) -> list[str]:
 
 
 def extract_events_for_day_card(card) -> list[_Evidence]:
+    """Extract pattern-relevant evidence events from one T2 day card.
+
+    中文：从一张 T2 日卡中提取模式相关的证据事件。
+
+    Args:
+        card: Day-card-like object with id, period, and fact fields.
+            带有 id、period 和事实字段的日卡对象。
+
+    Returns:
+        Evidence extracted from this card, possibly empty. 提取到的证据,
+        可能为空。
+    """
     events: list[_Evidence] = []
     card_id = card.id
     period = card.period
@@ -174,6 +241,23 @@ def make_candidates(
     max_counter_evidence: int = 2,
     max_supporting: int = 10,
 ) -> list[PatternCandidateCreate]:
+    """Build candidates from evidence groups that meet observation thresholds.
+
+    中文：将达到观察次数和日期数阈值的证据分组构造成候选。
+
+    Args:
+        cards: Day cards to scan. 要扫描的日卡。
+        min_observations: Minimum evidence events per candidate. 每个候选所需的
+            最少证据事件数。
+        min_dates: Minimum distinct dates per candidate. 每个候选所需的最少不同日期。
+        max_counter_evidence: Maximum counter-evidence items retained.
+            保留的最大反例条数。
+        max_supporting: Maximum supporting-evidence items retained.
+            保留的最大支持证据条数。
+
+    Returns:
+        Candidates ordered by evidence count and description. 按证据数和描述排序的候选。
+    """
     grouped: dict[str, list[_Evidence]] = defaultdict(list)
 
     for card in cards:
@@ -226,6 +310,9 @@ def make_candidates(
             label = context.split(":", 1)[1].replace("-", " ")
             description = f"Recurring branch context: {label}."
 
+        # Counter-evidence collection is not implemented; candidates must not
+        # pretend the absence of a collector is evidence against the pattern.
+        # 中文：反例收集尚未实现;不能把“没有收集器”伪装成支持或反对模式的证据。
         counter = []
 
         candidates.append(
@@ -242,6 +329,18 @@ def make_candidates(
 
 
 def _parse_card(card: object, *, since: datetime | None) -> bool:
+    """Return whether a card has a valid period within the requested range.
+
+    中文：判断日卡日期是否合法且落在请求的时间范围内。
+
+    Args:
+        card: Object with a period attribute. 带有 period 属性的对象。
+        since: UTC cutoff, or None for all valid dates. UTC 截止时间;None 表示不限。
+
+    Returns:
+        True when the date parses and is not before ``since``.
+        日期可解析且不早于 ``since`` 时返回 True。
+    """
     period = getattr(card, "period", "")
     parsed = parse_period_for_sort(period)
     if since is None:
@@ -250,10 +349,31 @@ def _parse_card(card: object, *, since: datetime | None) -> bool:
 
 
 def _normalize_existing_description(candidate_desc: str) -> str:
+    """Normalize an existing candidate description for duplicate matching.
+
+    中文：归一化已有候选描述,用于重复匹配。
+
+    Args:
+        candidate_desc: Candidate description. 候选描述。
+
+    Returns:
+        Normalized description. 归一化后的描述。
+    """
     return _normalise(candidate_desc)
 
 
 async def run(args: argparse.Namespace) -> int:
+    """Build Pattern Candidates from T2 cards and optionally persist them.
+
+    中文：根据 T2 日卡生成 Pattern Candidate,并按需持久化。
+
+    Args:
+        args: Parsed CLI flags. 解析后的命令行参数。
+
+    Returns:
+        Zero when candidates were considered, or one when no cards matched.
+        已处理候选时返回 0;没有匹配日卡时返回 1。
+    """
     settings = get_settings()
     service = await MemoryService.start(settings)
 
@@ -316,6 +436,13 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for pattern suggestions.
+
+    中文：构建模式建议脚本的命令行解析器。
+
+    Returns:
+        Configured argument parser. 已配置的参数解析器。
+    """
     parser = argparse.ArgumentParser(
         prog="python -m scripts.suggest_patterns",
         description="Generate deterministic Pattern Candidates from T2 day cards.",
@@ -370,6 +497,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Parse, validate, and run the pattern-suggestion workflow.
+
+    中文：解析并校验参数,然后运行模式建议流程。
+
+    Returns:
+        Process exit code. 进程退出码。
+    """
     parser = build_parser()
     args = parser.parse_args()
     if args.max_counter_evidence < 0:

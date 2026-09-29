@@ -11,6 +11,10 @@ mostly transmit tool chatter, so the input is compressed deliberately:
 
 The compression is stated in the prompt so the model knows it is seeing a
 sample, not the whole day.
+
+中文说明：本模块构造模型提示词，并把繁忙一天的对话压缩到明确的 token
+预算内。用户发言优先保留，助手发言按全天均匀采样，Path A 计算出的事实则
+原样传入；提示词会明确说明模型看到的是样本，而不是完整记录。
 """
 
 from __future__ import annotations
@@ -26,6 +30,8 @@ from .schemas import DiaryDraft
 # An assistant turn that is nothing but tool markers ("[tool:Bash]") carries no
 # information the FACTS block does not already state exactly. Those are sampled
 # last, so the budget goes to turns that say something.
+# 中文：纯工具标记没有提供 FACTS 之外的新信息，因此最后采样，把预算留给
+# 真正包含语义的发言。
 _TOOL_ONLY_RE = re.compile(r"^(?:\[tool:[^\]]+\]\s*)+$")
 
 SYSTEM_PROMPT = """\
@@ -68,16 +74,28 @@ Return JSON matching this schema:
 # Recorded per attempt so a first-pass rate is never a silent blend of two
 # different prompts — v1 never mentioned `confidence`, which the schema requires,
 # and that alone accounted for 17 of 19 failures across the first 46 days.
+# 中文：任何可能移动合规率的提示词改动都必须提升版本号；每次尝试都会记录
+# 该版本，避免把不同提示词的结果混成一个无法解释的指标。
 PROMPT_VERSION = "v4-scope-confidence-subject"
 
 
 def system_prompt() -> str:
+    """Render the system prompt with the current JSON schema.
+
+    中文：把当前 DiaryDraft JSON schema 内嵌到系统提示词中。
+
+    Returns:
+        The exact system prompt sent to the model.
+    """
     return SYSTEM_PROMPT % json.dumps(DiaryDraft.model_json_schema(), indent=2)
 
 
 @dataclass(slots=True)
 class DayInput:
-    """The compressed view of a day that gets sent to the model."""
+    """The compressed view of a day that gets sent to the model.
+
+    中文：发送给模型的单日压缩视图；project 仅在规则只适用于当前项目时使用。
+    """
 
     date: str
     facts: list[str]
@@ -88,11 +106,20 @@ class DayInput:
     project: str | None = None
 
     def render(self) -> str:
+        """Render the date, facts, scope, and sampled transcript.
+
+        中文：渲染日期、事实、项目作用域和采样后的对话文本。
+
+        Returns:
+            The user-message body sent to the model.
+        """
         lines = [f"DATE: {self.date}"]
         if self.project:
             # The model decides whether a preference is project-scoped; it
             # cannot know what the project is called, because the name comes
             # from the working directory and never appears in the turns.
+            # 中文：项目名来自工作目录，通常不会出现在对话正文中；显式提供后，
+            # 模型才能判断一条偏好是项目内规则还是跨项目习惯。
             lines.append(f"PROJECT: {self.project}")
         lines += ["", "FACTS (exact, computed locally):"]
         lines.extend(f"- {fact}" for fact in self.facts)
@@ -108,6 +135,13 @@ class DayInput:
         return "\n".join(lines)
 
     def estimated_tokens(self) -> int:
+        """Estimate tokens for the system prompt and rendered day together.
+
+        中文：估算系统提示词与单日正文合计的 token 数。
+
+        Returns:
+            The estimated request input size in tokens.
+        """
         return count_tokens(system_prompt()) + count_tokens(self.render())
 
 
@@ -125,6 +159,20 @@ def build_day_input(
     User turns are taken first and never dropped for assistant turns, because a
     preference is almost always something the user said. Assistant turns fill
     whatever budget remains.
+
+    中文：用户发言优先保留，因为偏好通常由用户表达；助手发言只使用剩余预算，
+    并在全天范围内采样。
+
+    Args:
+        date: Local date covered by the input.
+        facts: Deterministic facts computed by Path A.
+        turns: Full sequence of ``(role, text)`` pairs.
+        max_input_tokens: Total input-token budget, including the system prompt.
+        per_turn_chars: Maximum characters retained from one turn.
+        project: Dominant project name, if the card has one.
+
+    Returns:
+        A compressed DayInput that stays within the requested budget estimate.
     """
     user_texts: list[str] = []
     assistant_texts: list[str] = []
@@ -147,6 +195,8 @@ def build_day_input(
     # day fills the whole budget with user turns and the model never sees what
     # was actually done — only what was asked for. It then has to guess
     # outcomes, which is the fastest route to an invented detail.
+    # 中文：预留一部分预算给助手发言，避免模型只看到“要求做什么”，却看不到
+    # “实际做了什么”，从而被迫猜测结果。
     assistant_reserve = int(budget * 0.35) if assistant_texts else 0
     user_budget = budget - assistant_reserve
 
@@ -158,10 +208,12 @@ def build_day_input(
         kept_user.append(text)
         user_budget -= cost
     # Anything the user turns did not need goes back to the assistant sample.
+    # 中文：用户发言未用完的预算会归还给助手样本。
     budget = user_budget + assistant_reserve
 
     # Assistant turns are sampled evenly across the day rather than taken from
     # the front, so a long day is represented end to end.
+    # 中文：助手发言在全天均匀采样，避免长对话只保留开头。
     kept_assistant: list[str] = []
     if assistant_texts and budget > 0:
         stride = max(1, len(assistant_texts) // 40)
@@ -189,6 +241,16 @@ def repair_prompt(raw: str, errors: str) -> str:
     The model is shown its own output and the exact validation errors. Naming
     the failing field is what makes the second attempt usually succeed; a bare
     "that was invalid" tends to produce a differently invalid answer.
+
+    中文：把模型上一次输出和精确校验错误一起返回；明确失败字段通常比泛泛地说
+    “格式不对”更容易让下一次尝试修复成功。
+
+    Args:
+        raw: The model's previous reply after fence stripping.
+        errors: Human-readable validation errors.
+
+    Returns:
+        The next user message for the repair attempt.
     """
     return (
         "Your previous reply did not satisfy the schema.\n\n"

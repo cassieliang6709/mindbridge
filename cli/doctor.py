@@ -6,6 +6,12 @@ thing it read, because a green check nobody can trace is worth nothing here.
 
 This command writes nothing: no schema, no launchd agent, no compose lifecycle
 beyond reading container state. Fixes are printed for the operator to run.
+
+中文说明：这是对本地闭环的只读健康检查，只回答一个问题——"这台机器现在的
+状态是否能让 MindBridge 真正跑起来?"——并且完全靠实际观察来回答。每一行
+都写明它读取的是什么，因为一个查不到出处的绿色对勾在这里毫无价值。此命令
+不写任何东西:不建 schema，不装 launchd 任务，除了读取容器状态外不做任何
+compose 生命周期操作。修复建议只是打印出来，交给操作者自己去执行。
 """
 
 from __future__ import annotations
@@ -28,17 +34,43 @@ _MARK = {OK: "ok  ", WARN: "warn", FAIL: "FAIL"}
 
 
 class Report:
+    """Ordered collection of health-check rows, rendered as one aligned block.
+
+    中文：健康检查结果行的有序集合，最终渲染成一个对齐的文本块。
+    """
+
     def __init__(self) -> None:
+        """Start with an empty list of rows. 初始化为空的检查结果列表。"""
         self.rows: list[tuple[str, str, str, str]] = []
 
     def add(self, status: str, area: str, detail: str, source: str = "") -> None:
+        """Record one check result.
+
+        中文：记录一条检查结果。
+
+        Args:
+            status: One of OK, WARN, FAIL. 三种状态之一:OK、WARN 或 FAIL。
+            area: Short label for what was checked. 被检查项的简短名称。
+            detail: Human-readable finding. 人类可读的检查结论。
+            source: Optional command or path the finding came from, or the fix
+                to run. 可选的、结论所依据的命令/路径，或建议执行的修复
+                命令。
+        """
         self.rows.append((status, area, detail, source))
 
     @property
     def failed(self) -> bool:
+        """Whether any row is FAIL. 是否存在任何一条 FAIL 状态的记录。"""
         return any(status == FAIL for status, *_ in self.rows)
 
     def render(self) -> str:
+        """Format all rows into an aligned, multi-line report string.
+
+        中文：将全部记录格式化为对齐的多行报告字符串。
+
+        Returns:
+            The full report text, ready to print. 可直接打印的完整报告文本。
+        """
         width = max(len(area) for _, area, _, _ in self.rows)
         lines = []
         for status, area, detail, source in self.rows:
@@ -49,6 +81,10 @@ class Report:
 
 
 def _command_ok(command: list[str]) -> bool:
+    """Whether `command[0]` exists on PATH and running `command` exits 0.
+
+    中文：检查 `command[0]` 是否存在于 PATH 中，且执行 `command` 的退出码为 0。
+    """
     if shutil.which(command[0]) is None:
         return False
     return (
@@ -60,6 +96,17 @@ def _command_ok(command: list[str]) -> bool:
 
 
 def _check_checkout(report: Report) -> Path:
+    """Record whether the repo root and `.env` are present, and return the root.
+
+    中文：记录仓库根目录和 `.env` 是否存在，并返回该根目录。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+
+    Returns:
+        The repo root, as found by `repo_root()`. `repo_root()` 找到的仓库
+        根目录。
+    """
     root = repo_root()
     report.add(OK, "checkout", str(root))
     if (root / ".env").is_file():
@@ -75,7 +122,13 @@ def _check_checkout(report: Report) -> Path:
 
 
 def _check_imports(report: Report) -> None:
-    """Import the packages the MCP server needs before a client tries to."""
+    """Import the packages the MCP server needs before a client tries to.
+
+    中文：提前导入 MCP 服务器所需的依赖包，赶在客户端尝试连接之前发现问题。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     missing = []
     for module in ("mcp", "fastapi", "asyncpg", "httpx", "pydantic_settings"):
         try:
@@ -94,6 +147,16 @@ def _check_imports(report: Report) -> None:
 
 
 def _check_docker(report: Report) -> bool:
+    """Record whether Docker is up, and if so, whether db/redis are healthy.
+
+    中文：记录 Docker 是否在运行，以及(若在运行)db/redis 两个容器是否健康。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+
+    Returns:
+        True if the Docker daemon answered. Docker 守护进程有响应时返回 True。
+    """
     if not _command_ok(["docker", "info"]):
         report.add(
             FAIL,
@@ -106,6 +169,8 @@ def _check_docker(report: Report) -> bool:
 
     # `compose ps` reports health only for services it can see, so an absent
     # service and an unhealthy one are different findings.
+    # 中文：`compose ps` 只会报告它能看到的服务的健康状态，所以"服务不存在"
+    # 和"服务存在但不健康"是两种不同的结论，需要分开处理。
     result = subprocess.run(
         ["docker", "compose", "ps", "--format", "json", "db", "redis"],
         capture_output=True,
@@ -140,7 +205,13 @@ def _check_docker(report: Report) -> bool:
 
 
 async def _probe_postgres(report: Report) -> None:
-    """Connect with the real settings and count what is actually stored."""
+    """Connect with the real settings and count what is actually stored.
+
+    中文：用真实的 Settings 连接 Postgres，并统计各表中实际存储的行数。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     try:
         import asyncpg
 
@@ -152,7 +223,9 @@ async def _probe_postgres(report: Report) -> None:
     settings = get_settings()
     try:
         connection = await asyncpg.connect(str(settings.database_url), timeout=5)
-    except Exception as error:  # asyncpg raises a wide family here
+    # asyncpg raises a wide family here
+    # 中文：asyncpg 在连接失败时会抛出很多种不同的异常类型，这里统一兜住。
+    except Exception as error:
         report.add(
             FAIL,
             "postgres",
@@ -231,6 +304,13 @@ async def _probe_postgres(report: Report) -> None:
 
 
 async def _probe_embedder(report: Report) -> None:
+    """Record whether the configured embedder provider is reachable and pulled.
+
+    中文：记录配置的嵌入器 provider 是否可达、所需模型是否已拉取。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     try:
         import httpx
 
@@ -244,6 +324,9 @@ async def _probe_embedder(report: Report) -> None:
     if provider != "ollama":
         # Not a style preference: AGENTS.md records that hashing scores real
         # duplicates 0.13-0.73, so dedup never fires under it.
+        # 中文：这不是风格偏好问题——AGENTS.md 记录过 hashing 给真实重复项
+        # 打出的分数在 0.13-0.73 之间，导致去重在这种 provider 下永远不会
+        # 触发。
         report.add(
             WARN,
             "embeddings",
@@ -279,7 +362,13 @@ async def _probe_embedder(report: Report) -> None:
 
 
 async def _probe_mlx(report: Report) -> None:
-    """The local extractor is opt-in, so a silent one is a warning, not a failure."""
+    """The local extractor is opt-in, so a silent one is a warning, not a failure.
+
+    中文：本地提取器是可选启用的功能，所以它没有在跑只算警告，而不是失败。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     try:
         import httpx
 
@@ -305,6 +394,13 @@ async def _probe_mlx(report: Report) -> None:
 
 
 def _check_mcp_clients(report: Report) -> None:
+    """Record whether Claude Code / Codex have MindBridge registered as an MCP server.
+
+    中文：记录 Claude Code / Codex 是否已经把 MindBridge 注册为 MCP 服务器。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     for client, probe in (
         ("claude", ["claude", "mcp", "get", "mindbridge"]),
         ("codex", ["codex", "mcp", "get", "mindbridge"]),
@@ -323,6 +419,13 @@ def _check_mcp_clients(report: Report) -> None:
 
 
 def _check_schedulers(report: Report) -> None:
+    """Record whether the nightly ingest/patterns LaunchAgents are loaded.
+
+    中文：记录夜间 ingest/patterns 两个 LaunchAgent 是否已被 launchd 加载。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     uid = os.getuid()
     for label, job in (
         ("com.mindbridge.nightly-ingest", "ingest"),
@@ -341,6 +444,13 @@ def _check_schedulers(report: Report) -> None:
 
 
 def _check_logs(report: Report) -> None:
+    """Record the last line and mtime of each nightly job's log file.
+
+    中文：记录每个夜间任务日志文件的最后一行和最后修改时间。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     directory = log_dir()
     for name in ("ingest", "pattern-discovery"):
         path = directory / f"{name}.log"
@@ -357,12 +467,27 @@ def _check_logs(report: Report) -> None:
 
 
 async def _run_async_checks(report: Report) -> None:
+    """Run the three async probes (postgres, embedder, mlx) in sequence.
+
+    中文：依次运行三个异步探测(postgres、embedder、mlx)。
+
+    Args:
+        report: Report to append rows to. 用于追加检查结果的 Report。
+    """
     await _probe_postgres(report)
     await _probe_embedder(report)
     await _probe_mlx(report)
 
 
 def run() -> int:
+    """Run every check and print the combined report.
+
+    中文：运行全部检查项并打印汇总报告。
+
+    Returns:
+        0 if healthy, 1 if any check reported FAIL. 健康时返回 0；只要有
+        一项检查失败(FAIL)则返回 1。
+    """
     report = Report()
     _check_checkout(report)
     _check_imports(report)

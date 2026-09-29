@@ -18,6 +18,10 @@
 
 OpenAI/Gemini keys are read from the environment and never passed on the command
 line. The claude-cli provider instead uses Claude Code's existing sign-in.
+
+中文说明：这是 M2 第一阶段的命令行入口，把 T2 卡片背后的事实和对话转换成
+叙事与候选偏好。托管服务商需要显式授权发送数据；MLX 在本机运行。dry-run
+会逐字展示将发送的内容，并且不会调用模型或写入数据库。
 """
 
 from __future__ import annotations
@@ -31,7 +35,8 @@ import os
 import sys
 from zoneinfo import ZoneInfo
 
-from api.models import NarrativeUpdate, UpsertPreferenceRequest
+from api.memory_candidates import MemoryCandidateCreate
+from api.models import NarrativeUpdate
 from api.service import MemoryService
 from api.settings import get_settings
 from ingest.digest import day_bounds
@@ -46,6 +51,7 @@ logger = logging.getLogger("mindbridge.extract")
 
 # Rough public prices per 1M tokens, only used for the --dry-run estimate. They
 # drift, so the number is labelled an estimate wherever it is printed.
+# 中文：这些公开价格只用于 dry-run 估算且可能变化，因此输出始终标为估算值。
 _PRICES = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
@@ -54,6 +60,18 @@ _PRICES = {
 
 
 def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float | None:
+    """Estimate request cost when the model has a configured public price.
+
+    中文：模型存在已配置的公开价格时，按输入/输出 token 数估算美元费用。
+
+    Args:
+        model: Model name used as the price-table key.
+        input_tokens: Estimated input-token count.
+        output_tokens: Estimated output-token count.
+
+    Returns:
+        Estimated USD cost, or None when the model is not in the table.
+    """
     price = _PRICES.get(model)
     if price is None:
         return None
@@ -67,6 +85,18 @@ async def _load_target(
 
     A day card sees every turn in the local day; a session card sees only that
     session's, so the prose describes the session rather than the whole day.
+
+    中文：日卡读取本地日期内的全部发言；会话卡只读取指定会话。项目名取这些
+    发言中最常见的 project，供模型判断偏好是否只在该项目内成立。
+
+    Args:
+        service: Running memory service used for reads.
+        date: Local date in YYYY-MM-DD form.
+        session_id: Session scope, or None for a whole-day card.
+        tz_name: IANA timezone used to calculate day boundaries.
+
+    Returns:
+        ``(card, facts, turns, project)`` for the requested scope.
     """
     tz = ZoneInfo(tz_name)
     start, end = day_bounds(date, tz)
@@ -82,6 +112,16 @@ async def _load_target(
 
 
 async def run(args: argparse.Namespace) -> int:
+    """Run stats, dry-run, or extraction mode for the parsed CLI arguments.
+
+    中文：根据命令行参数运行统计、dry-run 或真实抽取流程。
+
+    Args:
+        args: Namespace produced by build_parser().
+
+    Returns:
+        Process exit code; zero means the selected operation completed.
+    """
     settings = get_settings()
     service = await MemoryService.start(settings)
     writer = DatasetWriter()
@@ -92,6 +132,7 @@ async def run(args: argparse.Namespace) -> int:
             return 0
 
         # Work items are (period, session_id); session_id None means the day card.
+        # 中文：待处理项为 (period, session_id)；session_id=None 表示日卡。
         targets: list[tuple[str, str | None]] = []
         if args.date:
             targets = [(date, None) for date in args.date]
@@ -119,6 +160,8 @@ async def run(args: argparse.Namespace) -> int:
             # Excerpts of real conversations — file paths, project names,
             # whatever was discussed — go to a third party and may be retained
             # under its policy. MLX instead serves the tuned model locally.
+            # 中文：Path A 与 Path B 不离开本机；托管 M2 会发送真实对话片段，
+            # 因此必须显式授权。MLX 则在本机提供模型服务。
             if args.provider != "mlx" and not args.send_to_provider:
                 print(
                     "REFUSING TO SEND.\n\n"
@@ -236,29 +279,40 @@ async def run(args: argparse.Namespace) -> int:
                 )
             )
 
-            written = 0
+            staged = 0
             if not args.no_preferences:
                 for preference in draft.preferences:
                     if preference.confidence < args.min_confidence:
                         continue
-                    # Path B: identical code path an MCP client would take, so
-                    # dedup and supersede behave the same either way.
-                    outcome = await service.upsert_preference(
-                        UpsertPreferenceRequest(
+                    candidate = await service.propose_memory_candidate(
+                        MemoryCandidateCreate(
                             content=preference.content,
+                            namespace="operational",
                             category=preference.category,
                             project=preference.project,
+                            confidence=preference.confidence,
+                            evidence=preference.evidence,
+                            source_period=date,
+                            source_session_id=session_id,
+                            source_summary_id=card.id,
+                            source_receipt={
+                                "provider": result.provider,
+                                "model": result.model,
+                                "prompt_version": result.prompt_version,
+                                "attempts": len(result.attempts),
+                                "first_attempt_valid": result.first_attempt_valid,
+                            },
                         )
                     )
-                    written += 1
+                    staged += 1
                     print(
-                        f"  T3 {outcome.action}: {preference.content} "
+                        f"  candidate {candidate.id}: {preference.content} "
                         f"(confidence {preference.confidence:.2f})"
                     )
 
             print(
                 f"{label}: ok in {len(result.attempts)} attempt(s), "
-                f"{len(draft.highlights)} highlight(s), {written} preference(s), "
+                f"{len(draft.highlights)} highlight(s), {staged} candidate(s), "
                 f"dataset={'+1' if captured else 'skipped'}"
             )
 
@@ -289,6 +343,13 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for the extraction runner.
+
+    中文：构建抽取命令的 argparse 解析器。
+
+    Returns:
+        A configured ArgumentParser.
+    """
     parser = argparse.ArgumentParser(prog="python -m extract.runner")
     parser.add_argument("--date", nargs="+", help="Local dates, YYYY-MM-DD.")
     parser.add_argument(
@@ -370,9 +431,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Parse arguments, mirror provider keys, and run the async entry point.
+
+    中文：解析参数、兼容常见服务商密钥变量，然后运行异步主流程。
+    """
     args = build_parser().parse_args()
     # Accept the bare provider names too, so a key already exported for other
     # tooling works without being copied into a second variable.
+    # 中文：兼容服务商原生环境变量，避免为 MindBridge 重复保存同一密钥。
     for src, dest in (
         ("OPENAI_API_KEY", "MINDBRIDGE_OPENAI_API_KEY"),
         ("GEMINI_API_KEY", "MINDBRIDGE_GEMINI_API_KEY"),

@@ -23,6 +23,11 @@ This script never writes evals/results.json. That file is the landing page's
 source and belongs to eval_holdout.py, which serves an OpenAI-compatible
 endpoint and has the --min-holdout guard. A number measured on this Mac gets
 reported in prose, by a human who saw it happen.
+
+中文说明：Apple Silicon 路径的第二阶段评估。在与教师模型相同的留出集上测量本地
+MLX 模型的首次回复 schema 合规率,并直接复用 ``eval_holdout.validate_reply``;
+不能另写一份规则,否则两边的数字不再可比。脚本从不写 ``evals/results.json``:
+那是落地页的受保护数据源,只允许带最小留出集限制的 ``eval_holdout.py`` 写入。
 """
 
 from __future__ import annotations
@@ -37,6 +42,18 @@ from train.train_mlx import DEFAULT_MODEL, fit_user_turn, split_pairs
 
 
 def main() -> int:
+    """Evaluate a local MLX model on the shared holdout split.
+
+    The optional detail file is intentionally separate from the landing-page
+    metrics file.
+
+    中文：在共享留出切分上评估本地 MLX 模型。可选的逐条详情文件与落地页指标文件
+    故意分离。
+
+    Returns:
+        Process exit code; input failures raise ``SystemExit``. 进程退出码;
+        输入失败会抛出 ``SystemExit``。
+    """
     parser = argparse.ArgumentParser(prog="python -m train.eval_mlx")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
@@ -88,6 +105,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.out and args.out.resolve() == Path("evals/results.json").resolve():
+        # ``eval_holdout`` owns publication because it enforces the sample-size
+        # guard; an MLX smoke run must never overwrite a public metric.
+        # 中文：``eval_holdout`` 负责发布,因为它执行最小样本保护;MLX 冒烟运行
+        # 绝不能覆盖公开指标。
         raise SystemExit("refusing to write evals/results.json from this script")
 
     _, holdout = split_pairs(args.holdout_frac)
@@ -115,6 +136,9 @@ def main() -> int:
     for index, row in enumerate(holdout, start=1):
         messages = [dict(m) for m in row["messages"]]
         user_positions = [i for i, m in enumerate(messages) if m["role"] == "user"]
+        # Use the training prompt budget so evaluation never rewards a model for
+        # handling a longer input shape than it saw during fine-tuning.
+        # 中文：使用训练时的 prompt 预算,避免评估让模型面对微调从未见过的更长输入。
         if user_positions:
             last = user_positions[-1]
             fixed = sum(

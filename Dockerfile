@@ -14,6 +14,7 @@ COPY mcp_server ./mcp_server
 COPY ingest ./ingest
 COPY extract ./extract
 COPY evals ./evals
+COPY worker ./worker
 
 EXPOSE 8000
 

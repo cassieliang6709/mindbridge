@@ -1,6 +1,6 @@
 """T3 — long-term vector memory with time decay and write-time dedup.
 
-Retrieval score:
+Default (temporal) retrieval score:
 
     score = cosine_similarity * exp(-decay_rate * decay_factor * Δt_days)
 
@@ -27,12 +27,14 @@ from ..models import (
     MemoryNamespace,
     MemoryRecord,
     MemoryWithDecay,
+    RankingMode,
     UpsertAction,
 )
 
 # A preference scoped to a different project is usually irrelevant here, but
 # not always — the same habit often shows up under two project names. 0.5 is
 # enough to keep it out of the top hits without hiding it.
+# 中文：其他项目的偏好通常不相关，但可能跨项目复用；0.5 会降低排序而不会隐藏记录。
 _OTHER_PROJECT_PENALTY = 0.5
 
 _RECORD_COLUMNS = """
@@ -43,11 +45,21 @@ _RECORD_COLUMNS = """
 
 @dataclass(slots=True)
 class NearestMatch:
+    """A T3 record and its cosine similarity to an incoming embedding.
+
+    中文：一条 T3 记录及其与待写入向量的余弦相似度。
+    """
+
     record: MemoryRecord
     similarity: float
 
 
 class VectorMemoryStore:
+    """Persist, rank, and retain auditable T3 vector-memory records.
+
+    中文：持久化、排序并保留可审计的 T3 向量记忆记录。
+    """
+
     def __init__(
         self,
         pool: asyncpg.Pool,
@@ -56,6 +68,16 @@ class VectorMemoryStore:
         dedup_threshold: float,
         superseded_penalty: float,
     ) -> None:
+        """Create a vector store with its measured ranking parameters.
+
+        中文：使用经过测量的排序参数创建向量存储。
+
+        Args:
+            pool: Open PostgreSQL connection pool with pgvector enabled.
+            decay_rate_per_day: Global daily exponential-decay rate.
+            dedup_threshold: Similarity at which a write refreshes a record.
+            superseded_penalty: Multiplier applied to closed records in reads.
+        """
         self._pool = pool
         self._decay_rate = decay_rate_per_day
         self._dedup_threshold = dedup_threshold
@@ -63,10 +85,18 @@ class VectorMemoryStore:
 
     @property
     def decay_rate_per_day(self) -> float:
+        """Return the global daily decay rate used by this store.
+
+        中文：返回该存储使用的全局每日衰减率。
+        """
         return self._decay_rate
 
     @property
     def dedup_threshold(self) -> float:
+        """Return the similarity threshold used for deduplicating writes.
+
+        中文：返回写入去重使用的相似度阈值。
+        """
         return self._dedup_threshold
 
     # --- writes -----------------------------------------------------------
@@ -78,6 +108,7 @@ class VectorMemoryStore:
         category: MemoryCategory | None = None,
     ) -> NearestMatch | None:
         """Closest still-valid record, for the dedup decision."""
+        # 中文：寻找最接近且仍有效的记录，为写入去重决策提供依据。
         row = await self._pool.fetchrow(
             f"""
             SELECT {_RECORD_COLUMNS},
@@ -108,6 +139,10 @@ class VectorMemoryStore:
         decay_factor: float = 1.0,
         project: str | None = None,
     ) -> MemoryRecord:
+        """Insert a new open T3 record with its embedding.
+
+        中文：插入一条仍有效的新 T3 记录及其向量嵌入。
+        """
         row = await self._pool.fetchrow(
             f"""
             INSERT INTO memory_vectors
@@ -133,6 +168,8 @@ class VectorMemoryStore:
         time something similar was said, or a frequently repeated fact would
         never age.
         """
+        # 中文：去重命中时只提升访问记录，不改变首次学习时间，避免重复事实
+        # 永不衰减。
         row = await self._pool.fetchrow(
             f"""
             UPDATE memory_vectors
@@ -150,6 +187,7 @@ class VectorMemoryStore:
 
     async def supersede(self, old_id: int, new_id: int) -> MemoryRecord:
         """Close an outdated record and point it at its replacement."""
+        # 中文：关闭过时记录，并链接到它的替代记录。
         row = await self._pool.fetchrow(
             f"""
             UPDATE memory_vectors
@@ -170,6 +208,7 @@ class VectorMemoryStore:
         Archive is an intentional, non-destructive state change. `superseded_by`
         is left as-is so the timeline stays stable for audit tools.
         """
+        # 中文：归档是可审计的状态变化，不删除历史也不改写替代关系。
         row = await self._pool.fetchrow(
             f"""
             UPDATE memory_vectors
@@ -195,6 +234,7 @@ class VectorMemoryStore:
         Keeps the same namespace/category/project and decay_factor by default;
         the caller may provide a custom decay_factor for the replacement.
         """
+        # 中文：先插入替代记录再关闭旧记录；事务中断时仍可保留可审计的历史链。
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 row = await conn.fetchrow(
@@ -242,6 +282,10 @@ class VectorMemoryStore:
         return new_record
 
     async def get(self, memory_id: int) -> MemoryRecord:
+        """Read one T3 record without calculating a decay weight.
+
+        中文：读取一条 T3 记录，但不计算时间衰减权重。
+        """
         row = await self._pool.fetchrow(
             f"""
             SELECT {_RECORD_COLUMNS}
@@ -255,6 +299,10 @@ class VectorMemoryStore:
         return MemoryRecord(**dict(row))
 
     async def get_with_decay(self, memory_id: int) -> MemoryWithDecay:
+        """Read one T3 record together with its current decay weight.
+
+        中文：读取一条 T3 记录及其当前时间衰减权重。
+        """
         row = await self._pool.fetchrow(
             f"""
             SELECT {_RECORD_COLUMNS},
@@ -275,6 +323,10 @@ class VectorMemoryStore:
         return MemoryWithDecay(**dict(row))
 
     def classify_write(self, similarity: float | None) -> UpsertAction:
+        """Classify a similarity as a refresh or a new insert.
+
+        中文：依据相似度将写入判定为刷新已有记录或插入新记录。
+        """
         if similarity is not None and similarity >= self._dedup_threshold:
             return "refreshed"
         return "inserted"
@@ -291,8 +343,20 @@ class VectorMemoryStore:
         namespaces: list[MemoryNamespace] | None = None,
         include_superseded: bool = False,
         project: str | None = None,
+        ranking_mode: RankingMode = "temporal",
+        record_access: bool = True,
     ) -> list[MemoryHit]:
-        """Top-K by cosine similarity discounted by age.
+        """Top-K by temporal or semantic relevance.
+
+        ``temporal`` preserves the legacy cosine-times-decay ranking. ``semantic``
+        uses cosine similarity (and the existing project mismatch penalty) for
+        ordering, while still returning age and decay values for audit.
+
+        `record_access` exists for measurement, not for the product path. Every
+        ranked read normally bumps access_count, which feeds ranking; a
+        benchmark or eval that sweeps the same queries would therefore promote
+        exactly the rows it is trying to score. Callers that are observing the
+        system rather than using it pass False.
 
         `project` scopes the result without filtering it. A preference tied to
         another project is pushed down rather than removed, because the scope
@@ -304,6 +368,8 @@ class VectorMemoryStore:
         alias so the planner can use it directly; Postgres does not allow an
         output alias in ORDER BY when it is wrapped in an expression.
         """
+        # 中文：项目范围只降低其他项目记录的排序，不过滤掉它们；便于纠正
+        # 模型误判范围。
         rows = await self._pool.fetch(
             f"""
             WITH scored AS (
@@ -321,16 +387,24 @@ class VectorMemoryStore:
                    exp(-$7::double precision * decay_factor * age_days)
                      * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $8::double precision END
                      AS decay_multiplier,
-                   cosine_similarity
-                     * exp(-$7::double precision * decay_factor * age_days)
-                     * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $8::double precision END
-                     * CASE
-                         WHEN $9::text IS NULL THEN 1.0
-                         WHEN project IS NULL THEN 1.0
-                         WHEN project = $9::text THEN 1.0
-                         ELSE $10::double precision
-                       END
-                     AS score
+                   CASE WHEN $11::text = 'semantic'
+                        THEN cosine_similarity
+                          * CASE
+                              WHEN $9::text IS NULL THEN 1.0
+                              WHEN project IS NULL THEN 1.0
+                              WHEN project = $9::text THEN 1.0
+                              ELSE $10::double precision
+                            END
+                        ELSE cosine_similarity
+                          * exp(-$7::double precision * decay_factor * age_days)
+                          * CASE WHEN valid_at IS NULL THEN 1.0 ELSE $8::double precision END
+                          * CASE
+                              WHEN $9::text IS NULL THEN 1.0
+                              WHEN project IS NULL THEN 1.0
+                              WHEN project = $9::text THEN 1.0
+                              ELSE $10::double precision
+                            END
+                   END AS score
             FROM scored
             ORDER BY score DESC
             LIMIT $2
@@ -345,9 +419,10 @@ class VectorMemoryStore:
             self._superseded_penalty,
             project,
             _OTHER_PROJECT_PENALTY,
+            ranking_mode,
         )
         hits = [MemoryHit(**dict(row)) for row in rows]
-        if hits:
+        if hits and record_access:
             await self._record_access([hit.id for hit in hits])
         return hits
 
@@ -364,6 +439,7 @@ class VectorMemoryStore:
         not the model recalling a memory, and conflating the two would inflate
         the access statistics.
         """
+        # 中文：时间线展示不计为模型回忆，避免仅浏览就虚增访问统计。
         rows = await self._pool.fetch(
             f"""
             WITH aged AS (
@@ -391,6 +467,10 @@ class VectorMemoryStore:
         return [MemoryWithDecay(**dict(row)) for row in rows]
 
     async def _record_access(self, ids: list[int]) -> None:
+        """Record that ranked retrieval returned these memory ids.
+
+        中文：记录这些记忆 ID 被排序检索返回过。
+        """
         await self._pool.execute(
             """
             UPDATE memory_vectors
@@ -401,6 +481,10 @@ class VectorMemoryStore:
         )
 
     async def count(self, include_superseded: bool = True) -> int:
+        """Count T3 records, optionally including closed history.
+
+        中文：统计 T3 记录数量，并可选择是否包含已关闭的历史记录。
+        """
         return int(
             await self._pool.fetchval(
                 """
@@ -414,6 +498,7 @@ class VectorMemoryStore:
 
     async def purge_all(self) -> None:
         """Test/eval helper: truncate T3. Never called by the API."""
+        # 中文：仅用于测试与评估；API 永不调用，因此生产路径不会清空 T3。
         await self._pool.execute(
             "TRUNCATE memory_vectors RESTART IDENTITY CASCADE"
         )
@@ -424,6 +509,8 @@ class VectorMemoryStore:
         Lets a benchmark verify exp(-λ·Δt) against a known age instead of
         waiting real days for a record to decay. Never called by the API.
         """
+        # 中文：仅用于测试与评估，方便以确定年龄验证指数衰减，而无需等待
+        # 真实时间流逝。
         row = await self._pool.fetchrow(
             f"""
             UPDATE memory_vectors

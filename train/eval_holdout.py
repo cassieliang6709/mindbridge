@@ -17,6 +17,13 @@ Produces:
 
 Writes into evals/results.json only with --write-results, so a number cannot
 reach the landing page by accident.
+
+中文说明：第二阶段评估,用于测量简历引用的两个数字。``extractionJsonAccuracy``
+是留出集上第一次回复通过 ``DiaryDraft`` 校验的比例,与第一阶段教师模型的定义相同;
+repair 的结果另行统计,绝不混入。``localExtractionCostDelta`` 用相同留出日的实测
+token 和 GPU 时间换算成本,本地模型并非免费。只有 ``--write-results`` 才能写入
+落地页数据,且小于 ``--min-holdout``(默认 30)时必须拒绝写入:极少样本的比例误差
+远大于数字本身,不能被手填或当作可公开的指标。
 """
 
 from __future__ import annotations
@@ -51,6 +58,19 @@ def validate_reply(text: str) -> tuple[bool, str | None]:
 
     A code fence is stripped before validating — that is formatting, not a
     schema failure, and it is the same allowance stage one made for the teacher.
+
+    中文：这是抽取指标的唯一 schema 判定标准,所有评估器都从这里导入它,避免教师
+    与微调模型的衡量标准悄然漂移。代码围栏只是格式,并非 schema 失败,因此会先移除;
+    与第一阶段对教师模型的宽容规则一致。
+
+    Args:
+        text: Raw reply returned by the model. 模型返回的原始回复。
+
+    Returns:
+        ``(valid, error_message)``: validity against ``DiaryDraft`` after
+        code-fence handling, plus validation details on failure.
+        ``(valid, error_message)``: 去除代码围栏后是否满足 ``DiaryDraft``,
+        失败时附带校验详情。
     """
     stripped = text.strip()
     if stripped.startswith("```"):
@@ -74,6 +94,19 @@ async def _one(
     model: str,
     row: dict,
 ) -> dict:
+    """Evaluate one holdout pair through an OpenAI-compatible endpoint.
+
+    中文：通过 OpenAI 兼容接口评估一条留出数据。
+
+    Args:
+        client: HTTP client used for the request. 发起请求的 HTTP 客户端。
+        endpoint: Model API base URL. 模型 API 基础 URL。
+        model: Model identifier. 模型标识符。
+        row: Captured holdout pair. 采集的留出数据。
+
+    Returns:
+        Per-row validity, token, and timing measurements. 单条的合规、token 与耗时数据。
+    """
     started = time.perf_counter()
     response = await client.post(
         f"{endpoint.rstrip('/')}/chat/completions",
@@ -102,6 +135,18 @@ async def _one(
 
 
 async def run(args: argparse.Namespace) -> int:
+    """Evaluate every holdout row and optionally publish measured metrics.
+
+    中文：评估所有留出集行,并在满足保护条件时按需发布实测指标。
+
+    Args:
+        args: Parsed CLI flags. 解析后的命令行参数。
+
+    Returns:
+        Zero on successful evaluation, one for missing input, or two when a
+        requested publication fails the minimum-holdout guard.
+        评估成功返回 0;缺少输入返回 1;请求发布但未满足最小留出集保护时返回 2。
+    """
     if not HOLDOUT_OUT.exists():
         print(f"{HOLDOUT_OUT} not found. Run: python -m train.prepare_dataset")
         return 1
@@ -170,6 +215,10 @@ async def run(args: argparse.Namespace) -> int:
         return 0
 
     if len(rows) < args.min_holdout:
+        # Small samples can look perfect by chance. Metrics that feed a public
+        # page must be measured, not manually supplied or rushed into existence.
+        # 中文：小样本可能偶然显示完美分数。进入公开页面的指标必须实测,不能手填,
+        # 也不能为了尽早出现数字而绕过最小留出集保护。
         print(
             f"\nREFUSING TO WRITE: {len(rows)} holdout day(s) is below "
             f"--min-holdout {args.min_holdout}. A rate over a handful of days "
@@ -212,6 +261,13 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    """Parse CLI flags and run holdout evaluation.
+
+    中文：解析命令行参数并运行留出集评估。
+
+    Returns:
+        Process exit code. 进程退出码。
+    """
     parser = argparse.ArgumentParser(prog="python -m train.eval_holdout")
     parser.add_argument("--endpoint", default="http://localhost:8000/v1")
     parser.add_argument("--model", required=True)

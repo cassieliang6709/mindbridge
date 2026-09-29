@@ -1,5 +1,7 @@
 # MindBridge
 
+[中文 README](README.zh-CN.md)
+
 A reflective AI companion powered by a transparent temporal Memory Core. The
 product helps a person see what stayed, what changed, and what should no longer
 define them; the technical core preserves the source, time and validity of each
@@ -69,7 +71,8 @@ work with the user (`coding_style`, `tool_preference`, `behavioral_fact`,
 `schedule`, `other`). **Reflective** memory holds wording the user has reviewed
 about recurring patterns, values, triggers, helpful strategies or an identity
 hypothesis. Reflective writes fail validation unless `confirmed_by_user=true`;
-automatic transcript extraction continues to write operational memory only.
+automatic transcript extraction stages operational suggestions in the Memory
+Inbox instead of writing T3 directly. Only a keep/edit decision promotes one.
 An MBTI-like label can therefore be generated as a dated, sourced hypothesis,
 not silently stored as a fact about the person.
 
@@ -95,6 +98,13 @@ with a partial one, so a nightly job would shrink every card it touched.
 
 ## Current state
 
+The planned learning-infrastructure extension—CorpCheck trajectory ingestion,
+versioned datasets, GSM8K bring-up, SFT/GRPO evaluation and guarded model
+promotion—is specified in
+[`docs/LEARNING_INFRASTRUCTURE_ROADMAP.md`](docs/LEARNING_INFRASTRUCTURE_ROADMAP.md).
+That document labels these pieces as planned; the table below remains the source
+of truth for what is built today.
+
 The front end, ingestion, memory service and local extraction loop are built.
 The deployed site still uses sample data because the database and model live on
 one Mac; it labels that state instead of presenting the sample as live.
@@ -111,8 +121,10 @@ one Mac; it labels that state instead of presenting the sample as live.
 | `ingest/` — Path A readers for Claude Code and Codex CLI | done |
 | `/demo` wired to the API, with an offline fallback | done |
 | Nightly scheduler for Path A (launchd, opt-in) | done |
+| `/runtime/night-shift` — Celery job receipts + Memory Inbox | done locally |
+| PostgreSQL job ledger → Redis broker → idempotent Celery worker | done locally |
 | `train/` — 3B 4-bit MLX LoRA training and holdout evaluation (M2) | completed locally (2026-08-09) |
-| Local MLX HTTP provider → T2/T3 → API/Diary/MCP | working locally |
+| Local MLX HTTP provider → T2 + reviewed T3 candidates | working locally |
 | Semantic query cache experiment (M5) | measured unsafe; disabled |
 
 The diary at `/demo` now reads the backend through `/api/diary`. When the API is
@@ -125,9 +137,18 @@ rows can never be presented as if they came from Postgres.
 
 Path A first produces a reproducible **rule-based** day card — counts, tool
 tallies, time spans and git branches. The optional local MLX pass adds narrative
-and durable preferences, while keeping the rule-based facts beneath it. Those
-preferences use the same `MemoryService` write path as MCP, so extraction and an
-agent call cannot implement different dedup behaviour.
+and proposes durable preferences while keeping the rule-based facts beneath it.
+Each proposal remains outside searchable T3 with its source card, model,
+confidence and attempt receipt. Keeping or editing one uses the same
+`MemoryService` write path as MCP, so review and an agent call cannot drift on
+dedup behaviour.
+
+Slow local work runs through **Night Shift**. Launchd remains the clock; the API
+writes a work request to PostgreSQL, sends only its job id through Redis, and a
+Celery worker performs local extraction or retrieval replay. Late acknowledgement,
+bounded exponential retries and deterministic idempotency keys make duplicate
+delivery safe. PostgreSQL—not a Celery result backend—is the operator-visible
+source of truth, and `/runtime/night-shift` exposes every receipt and candidate.
 
 The default embedder is a **deterministic hashing fallback**: offline, no key,
 and lexical-only. It exists so the stack boots and the mechanical tests run
@@ -140,7 +161,7 @@ retrieval-quality numbers measured under it.
 cp .env.example .env
 .venv/bin/pip install -e .        # puts `mindbridge` and `mindbridge-mcp` in .venv/bin
 docker compose up -d db redis     # Postgres+pgvector on :5433, Redis on :6379
-docker compose up -d api          # FastAPI on :8000, OpenAPI at /docs
+docker compose up -d api worker   # FastAPI on :8000 + background worker
 curl localhost:8000/healthz
 docker compose run --rm evals     # benchmark -> evals/results.json
 ```
@@ -309,6 +330,10 @@ and `POST /memories` over HTTP cannot drift apart.
 | `POST /patterns` · `GET /patterns` | Reflection | create/review candidates outside T3 |
 | `POST /patterns/{id}/resolve` | Reflection | confirm/edit into reflective T3, or reject |
 | `GET /daily-review` | Companion | one review surface across T2, T3 and candidates |
+| `GET /night-shift` | Background | job receipts, Memory Inbox and latest replay metrics |
+| `POST /night-shift/run` | Background | enqueue missing-card extraction and retrieval replay |
+| `POST /night-shift/candidates/{id}/resolve` | Background | keep/edit into T3, or reject |
+| `POST /night-shift/jobs/{id}/retry` | Background | explicitly retry a terminal failed job |
 
 ### Pattern Candidate discovery (deterministic)
 

@@ -3,6 +3,9 @@
 This deliberately re-extracts one real day into T2, then treats T3 as
 read-only. A verification run must not leave a synthetic preference in the
 user's durable memory just to prove that writes work.
+
+中文说明：本模块实现本地验证闭环。它会对一个真实日期重新做 T2 抽取,但把 T3
+视为只读;验证不能为了证明写入路径可用而向用户长期记忆塞入一条合成偏好。
 """
 
 from __future__ import annotations
@@ -18,11 +21,32 @@ from mcp.client.stdio import stdio_client
 
 
 def _require(condition: bool, message: str) -> None:
+    """Raise a clear verification error when a required condition is false.
+
+    中文：当必需的校验条件为假时,抛出清晰的校验错误。
+
+    Args:
+        condition: Condition that must hold. 必须成立的条件。
+        message: Failure message. 失败时显示的信息。
+
+    Raises:
+        RuntimeError: If ``condition`` is false. 条件为假时抛出。
+    """
     if not condition:
         raise RuntimeError(message)
 
 
 async def _mcp_query(query: str) -> str:
+    """Query the MCP server's temporal-search tool in a subprocess.
+
+    中文：以子进程方式调用 MCP server 的 temporal search 工具。
+
+    Args:
+        query: Search text to send to MCP. 发送给 MCP 的检索文本。
+
+    Returns:
+        Concatenated text returned by the tool. 工具返回的拼接文本。
+    """
     server = StdioServerParameters(
         command=sys.executable,
         args=["-m", "mcp_server.server"],
@@ -58,6 +82,19 @@ async def _mcp_query(query: str) -> str:
 
 
 async def verify(api_url: str, web_url: str, requested_date: str | None) -> None:
+    """Verify health, safe T2 re-extraction, and T3 recall through all routes.
+
+    中文：验证服务健康状态、安全的 T2 重抽取,以及各访问路径对 T3 的召回。
+
+    Args:
+        api_url: API base URL. API 服务基础 URL。
+        web_url: Web app base URL. Web 应用基础 URL。
+        requested_date: Day card to re-extract, or None to choose one.
+            指定重抽取日卡;None 时自动选择。
+
+    Raises:
+        RuntimeError: If any verification assertion fails. 任一断言失败时抛出。
+    """
     async with httpx.AsyncClient(timeout=30.0) as client:
         health = (await client.get(f"{api_url}/healthz")).raise_for_status().json()
         _require(health.get("postgres") == "ok", "Postgres is not healthy")
@@ -184,6 +221,10 @@ async def verify(api_url: str, web_url: str, requested_date: str | None) -> None
 
 
 def main() -> None:
+    """Parse flags and run the verification loop, exiting nonzero on failure.
+
+    中文：解析参数并运行验证闭环;失败时以非零退出码结束。
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", default=None, help="T2 day card to re-extract")
     parser.add_argument("--api-url", default="http://127.0.0.1:8000")

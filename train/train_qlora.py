@@ -11,6 +11,10 @@ substitute. That is why stage one uses a hosted API.
 
 A 7B model in 4-bit needs roughly 16 GB of VRAM to train at seq_len 4096. On a
 16 GB T4 keep --max-seq-length at 2048 and --batch-size at 1.
+
+中文说明：在租用的 CUDA GPU 上用 Unsloth 对 Qwen2.5-7B 做 QLoRA 微调。4-bit
+bitsandbytes 依赖 CUDA,因此本机 Mac/MPS 不能运行这条路径。7B 模型在 4-bit、4096
+序列长度下约需 16 GB 显存;16 GB T4 应保持较短序列和 batch size 1。
 """
 
 from __future__ import annotations
@@ -26,6 +30,16 @@ BASE_MODEL = "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 
 
 def load_rows(path: Path) -> list[dict]:
+    """Load JSONL training rows or explain the missing preparation step.
+
+    中文：加载 JSONL 训练行;文件缺失时说明需要先执行的数据准备步骤。
+
+    Args:
+        path: Training JSONL path. 训练 JSONL 路径。
+
+    Returns:
+        One parsed dictionary per JSONL line. 每行对应一个解析后的字典。
+    """
     if not path.exists():
         raise SystemExit(
             f"{path} not found. Run: python -m train.prepare_dataset"
@@ -40,12 +54,31 @@ def to_chat(row: dict) -> dict:
     The target is the compact JSON of the validated object — no fence, no
     prose. Training on the teacher's raw text would teach the student to
     reproduce its fences and its occasional schema misses.
+
+    中文：把采集数据转换成 chat 训练记录。目标只用通过校验的紧凑 JSON,不使用教师
+    的原始回复,以免学生复制代码围栏、闲聊或偶发的 schema 错误。
+
+    Args:
+        row: Captured pair with messages and validated completion. 包含消息和
+            已校验 completion 的采集数据。
+
+    Returns:
+        Chat record ending with the assistant JSON answer. 以 assistant JSON
+        答案结尾的 chat 记录。
     """
     completion = json.dumps(row["completion"], ensure_ascii=False)
     return {"messages": [*row["messages"], {"role": "assistant", "content": completion}]}
 
 
 def main() -> int:
+    """Configure and run end-to-end Unsloth QLoRA fine-tuning.
+
+    中文：配置并端到端运行 Unsloth QLoRA 微调。
+
+    Returns:
+        Zero after successful training; failures propagate or exit directly.
+        训练成功返回 0;失败会直接退出或向上传播。
+    """
     parser = argparse.ArgumentParser(prog="python -m train.train_qlora")
     parser.add_argument("--base-model", default=BASE_MODEL)
     parser.add_argument("--epochs", type=float, default=2.0)
@@ -65,12 +98,17 @@ def main() -> int:
     rows = load_rows(TRAIN_FILE)
     print(f"{len(rows)} training pairs")
     if len(rows) < 200:
+        # A small training sample can overfit and make any holdout result look
+        # better than it is; keep this warning aligned with the evaluation guard.
+        # 中文：很小的训练集会过拟合,让留出集结果看起来优于真实能力;该警告与评估
+        # 的最小样本保护保持一致。
         print(
             "WARNING: under 200 pairs. Expect overfitting; treat any holdout "
             "number from this run as provisional, and do not quote it."
         )
 
     # Imported here so --help works on a machine without CUDA.
+    # 中文：延迟导入使没有 CUDA 的机器也能正常查看 ``--help``。
     from datasets import Dataset  # type: ignore[import-not-found]
     from trl import SFTConfig, SFTTrainer  # type: ignore[import-not-found]
     from unsloth import FastLanguageModel  # type: ignore[import-not-found]
@@ -88,6 +126,8 @@ def main() -> int:
         bias="none",
         # Attention and MLP projections. Restricting to attention only saves
         # little memory here and measurably hurts JSON-shape adherence.
+        # 中文：同时覆盖注意力和 MLP 投影。只训注意力层省不了多少显存,却会明显损害
+        # JSON 结构遵循能力。
         target_modules=[
             "q_proj",
             "k_proj",

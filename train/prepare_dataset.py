@@ -7,6 +7,10 @@ The split is BY DATE and deterministic (hash of the date), not random per row:
 a day's pairs must never straddle the split, or the model would be evaluated on
 a day it partly memorised. Re-running with more data keeps the existing
 assignment, so a holdout day stays a holdout day.
+
+中文说明：按日期(而不是按单条记录随机)把已采集数据拆为训练集和留出集。一天内的
+多个 session 共享上下文,若跨集合会让模型在测试日的一部分上训练,得到虚假的高分。
+日期的稳定 hash 使新数据到来后旧日期仍留在原集合,因此留出集持续代表未见日期。
 """
 
 from __future__ import annotations
@@ -28,16 +32,40 @@ MIN_PAIRS_FOR_TRAINING = 200
 
 # Which models count as the teacher. A fine-tune learns the mapping in this
 # file, so anything here becomes the standard the student is trained toward.
+# 中文：数据集同时可能包含本地模型的输出;只能用教师模型结果作训练目标,否则学生会
+# 学到自己的错误,而不是教师定义的抽取标准。
 TEACHER_MODELS = frozenset({"sonnet"})
 
 
 def _bucket(date: str) -> float:
-    """Stable 0..1 position for a date, so the split never shifts."""
+    """Return a stable 0..1 bucket for a date, so its split never shifts.
+
+    中文：为日期生成稳定的 0..1 分桶值,确保其训练/留出归属不会随重跑改变。
+
+    Args:
+        date: ISO-like date string used as the deterministic split key.
+            用作确定性切分键的日期字符串。
+
+    Returns:
+        A deterministic value from zero (inclusive) to one (exclusive).
+        大于等于 0 且小于 1 的确定性数值。
+    """
     digest = hashlib.blake2b(date.encode(), digest_size=8).digest()
     return int.from_bytes(digest, "big") / 2**64
 
 
 def load_pairs(path: Path = DATASET) -> list[dict]:
+    """Load non-empty JSONL capture rows from ``path``.
+
+    中文：从 ``path`` 加载所有非空 JSONL 采集行。
+
+    Args:
+        path: Capture file to read. 要读取的采集文件。
+
+    Returns:
+        Parsed capture rows, or an empty list when the file is absent.
+        解析后的采集行;文件不存在时返回空列表。
+    """
     if not path.exists():
         return []
     pairs = []
@@ -50,6 +78,14 @@ def load_pairs(path: Path = DATASET) -> list[dict]:
 
 
 def main() -> int:
+    """Create a deterministic date-based train/holdout split or report it.
+
+    中文：创建确定性的按日期训练/留出切分,或只输出其就绪情况。
+
+    Returns:
+        Zero on success, or one when there are no captured pairs.
+        成功返回 0;没有采集数据时返回 1。
+    """
     parser = argparse.ArgumentParser(prog="python -m train.prepare_dataset")
     parser.add_argument("--holdout-frac", type=float, default=0.2)
     parser.add_argument(
@@ -72,6 +108,8 @@ def main() -> int:
     # output sitting next to the teacher's. Training on that teaches the student
     # its own mistakes — the base 7B rows in this file include three of the
     # day's todos written into T3 as standing preferences.
+    # 中文：只保留教师模型行。若本地模型输出也混入训练目标,学生会学习并放大它自己
+    # 的 schema 或偏好判断错误,评测也不再能说明微调是否优于教师基线。
     teacher = [
         pair for pair in pairs
         if (pair.get("meta") or {}).get("model") in TEACHER_MODELS
@@ -95,6 +133,8 @@ def main() -> int:
 
     # Still split BY DATE, not by pair: sessions from one day share context, so
     # letting them straddle the split would leak train data into the holdout.
+    # 中文：依然必须按日期切分,不能按 pair 切分;同一天 session 共享上下文,跨集合
+    # 会造成训练数据泄漏到留出评测。
     holdout_dates = {
         date for date, _ in by_key if _bucket(date) < args.holdout_frac
     }

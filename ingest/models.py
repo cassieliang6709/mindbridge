@@ -2,6 +2,9 @@
 
 Claude Code and Codex CLI write very different JSONL, so each reader normalises
 into ParsedTurn and nothing downstream needs to know which tool produced it.
+
+中文说明：Claude Code 与 Codex CLI 的日志格式不同。两个读取器先把原始记录
+转换为本模块的统一模型，后续摄取流程因此不需要区分数据来自哪个工具。
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ SourceKind = Literal["claude-code", "codex-cli"]
 class ParsedTurn(BaseModel):
     """One conversational turn, normalised across sources."""
 
+    # 中文：跨数据源统一的一轮对话。source_key 是幂等写入所依赖的稳定身份。
     source: SourceKind
     session_id: str
     source_key: str = Field(
@@ -49,11 +53,21 @@ class ParsedTurn(BaseModel):
     @field_validator("text")
     @classmethod
     def strip_nul(cls, value: str) -> str:
-        """Postgres text cannot hold 0x00, and transcripts do contain it.
+        """Remove NUL bytes before text reaches Postgres.
 
-        Tool output occasionally carries a NUL — reading a binary file, or a
-        process writing raw bytes. Dropping it here covers every reader at once
-        instead of relying on each one to remember.
+        Tool output can contain 0x00 after reading binary data or raw process
+        output. PostgreSQL text rejects that byte, so cleaning it in the shared
+        model protects every reader at the same boundary.
+
+        中文：工具读取二进制数据或原始进程输出时可能带入 NUL 字节，而
+        PostgreSQL 的 text 无法存储它。在共享模型层清洗可以一次覆盖所有
+        日志读取器。
+
+        Args:
+            value: Parsed transcript text.
+
+        Returns:
+            The text with every NUL byte removed.
         """
         return value.replace("\x00", "") if "\x00" in value else value
 
@@ -61,6 +75,7 @@ class ParsedTurn(BaseModel):
 class FileCursor(BaseModel):
     """Where ingestion stopped in one transcript file."""
 
+    # 中文：单个日志文件的断点；文件缩短时读取器会忽略旧偏移并从头读取。
     source: SourceKind
     path: str
     bytes_read: int = 0
@@ -72,6 +87,7 @@ class FileCursor(BaseModel):
 class ParseOutcome(BaseModel):
     """Result of reading one file from a byte offset."""
 
+    # 中文：一次增量读取的结果，同时记录新偏移和异常行统计。
     path: str
     source: SourceKind
     turns: list[ParsedTurn]
@@ -86,6 +102,7 @@ class ParseOutcome(BaseModel):
 
 
 class DayStats(BaseModel):
+    # 中文：构建每日摘要时使用的可复现聚合统计，不含模型推断结果。
     sessions: int = 0
     turns: int = 0
     user_turns: int = 0
@@ -113,6 +130,8 @@ class DayDigest(BaseModel):
     prove from the transcript.
     """
 
+    # 中文：这里的摘要完全由计数与时间戳确定性生成，不是模型写作。模型生成的
+    # 叙事与长期偏好属于后续抽取阶段，不能伪装成本模型能够直接证明的事实。
     date: str
     summary: str
     facts: list[str]

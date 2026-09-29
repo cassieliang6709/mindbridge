@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-09-01T04:05:43.986769+00:00",
+  "environment": {
+    "embedder": "ollama",
+    "embedding_dim": 768,
+    "redis_attached": true,
+    "semantic_cache": false,
+    "open_memories": 575,
+    "queries": 30,
+    "rounds": 10
+  },
+  "connection_reuse": {
+    "shared_connection": {
+      "label": "shared_connection",
+      "n": 300,
+      "p50_ms": 49.37,
+      "p95_ms": 80.81,
+      "max_ms": 371.29,
+      "mean_ms": 54.76
+    },
+    "per_call_connection": {
+      "label": "per_call_connection",
+      "n": 300,
+      "p50_ms": 59.58,
+      "p95_ms": 92.35,
+      "max_ms": 1786.65,
+      "mean_ms": 70.72
+    },
+    "p50_saved_ms": 10.21,
+    "p50_saved_pct": 17.1
+  },
+  "paths": {
+    "embed": {
+      "label": "embed",
+      "n": 300,
+      "p50_ms": 53.09,
+      "p95_ms": 75.26,
+      "max_ms": 192.36,
+      "mean_ms": 56.3
+    },
+    "search": {
+      "label": "search",
+      "n": 300,
+      "p50_ms": 11.95,
+      "p95_ms": 23.06,
+      "max_ms": 128.21,
+      "mean_ms": 13.44
+    },
+    "search_access": {
+      "label": "search_access",
+      "n": 300,
+      "p50_ms": 11.69,
+      "p95_ms": 23.52,
+      "max_ms": 75.54,
+      "mean_ms": 13.65
+    },
+    "miss": {
+      "label": "miss",
+      "n": 300,
+      "p50_ms": 73.28,
+      "p95_ms": 110.91,
+      "max_ms": 226.96,
+      "mean_ms": 76.62
+    },
+    "redis_hit": {
+      "label": "redis_hit",
+      "n": 300,
+      "p50_ms": 0.85,
+      "p95_ms": 4.06,
+      "max_ms": 14.48,
+      "mean_ms": 1.37
+    },
+    "lru_hit": {
+      "label": "lru_hit",
+      "n": 300,
+      "p50_ms": 0.06,
+      "p95_ms": 0.17,
+      "max_ms": 11.09,
+      "mean_ms": 0.13
+    }
+  }
+}

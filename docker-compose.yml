@@ -58,6 +58,8 @@ services:
       # ollama runs on the host; localhost inside a container is the
       # container. host.docker.internal reaches back out to the Mac.
       MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
+      MINDBRIDGE_AGENT_MODEL: ${MINDBRIDGE_AGENT_MODEL:-qwen2.5:7b}
+      MINDBRIDGE_AGENT_TIMEOUT_SECONDS: ${MINDBRIDGE_AGENT_TIMEOUT_SECONDS:-90}
       MINDBRIDGE_OPENAI_API_KEY: ${MINDBRIDGE_OPENAI_API_KEY:-}
       MINDBRIDGE_GEMINI_API_KEY: ${MINDBRIDGE_GEMINI_API_KEY:-}
       MINDBRIDGE_DECAY_RATE_PER_DAY: ${MINDBRIDGE_DECAY_RATE_PER_DAY:-0.01}
@@ -66,6 +68,35 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "${MINDBRIDGE_API_PORT:-8000}:8000"
+    volumes:
+      # Retrieval labels and latest replay receipts are local artifacts shared
+      # with the worker; mounting keeps API reads and worker writes consistent.
+      - ./evals:/app/evals
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["celery", "-A", "worker.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=1"]
+    environment:
+      MINDBRIDGE_DATABASE_URL: postgresql://${MINDBRIDGE_DB_USER:-mindbridge}:${MINDBRIDGE_DB_PASSWORD:-mindbridge}@db:5432/${MINDBRIDGE_DB_NAME:-mindbridge}
+      MINDBRIDGE_REDIS_URL: redis://redis:6379/0
+      MINDBRIDGE_EMBEDDING_PROVIDER: ${MINDBRIDGE_EMBEDDING_PROVIDER:-hashing}
+      MINDBRIDGE_EMBEDDING_MODEL: ${MINDBRIDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      MINDBRIDGE_EMBEDDING_DIM: ${MINDBRIDGE_EMBEDDING_DIM:-1536}
+      MINDBRIDGE_OLLAMA_URL: ${MINDBRIDGE_OLLAMA_URL:-http://host.docker.internal:11434}
+      MINDBRIDGE_MLX_URL: ${MINDBRIDGE_MLX_URL:-http://host.docker.internal:8080/v1}
+      MINDBRIDGE_MLX_MODEL: ${MINDBRIDGE_MLX_MODEL:-mlx-community/Qwen2.5-3B-Instruct-4bit}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./api:/app/api
+      - ./extract:/app/extract
+      - ./evals:/app/evals
+      - ./worker:/app/worker
     depends_on:
       db:
         condition: service_healthy
