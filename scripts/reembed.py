@@ -6,12 +6,12 @@ that the previous embedder could not see.
 
     # re-embed in place (changes the vector column width)
     MINDBRIDGE_EMBEDDING_PROVIDER=ollama \\
-    MINDBRIDGE_EMBEDDING_MODEL=nomic-embed-text \\
-    MINDBRIDGE_EMBEDDING_DIM=768 \\
+    MINDBRIDGE_EMBEDDING_MODEL=bge-m3 \\
+    MINDBRIDGE_EMBEDDING_DIM=1024 \\
     .venv/bin/python -m scripts.reembed --apply
 
     # then merge near-duplicates at the new threshold
-    ... --apply --merge-duplicates --threshold 0.80
+    ... --apply --merge-duplicates --threshold 0.86
 
 Why this exists: the hashing fallback scores real duplicates 0.13-0.73, so
 write-time dedup never fired and T3 accumulated many phrasings of one fact.
@@ -24,6 +24,12 @@ the space is compressed — and in that band the merges are mostly wrong. One at
 0.686 would have merged "validate with mock data first" into "no fake data
 anywhere", which are nearly opposite. At >=0.80 every proposed merge was a real
 duplicate.
+
+Under bge-m3 the same reading, over 129 pairs, put the line at 0.86: the highest
+distinct pair scored 0.856, and one at 0.802 paired "redesign in a new isolated
+folder" with "redesign inside the existing repo" — opposite preferences. The
+default below follows MINDBRIDGE_DEDUP_THRESHOLD, so it matches the model the
+settings name. See evals/dedup_bands.py.
 
 The asymmetry justifies erring high: a missed merge leaves visible clutter, while
 a false merge silently closes a distinct preference and is hard to notice later.
@@ -162,10 +168,8 @@ async def run(args: argparse.Namespace) -> int:
                 await connection.execute(
                     "ALTER TABLE memory_vectors ALTER COLUMN embedding SET NOT NULL"
                 )
-                await connection.execute(
-                    "CREATE INDEX memory_vectors_embedding_idx ON memory_vectors "
-                    "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
-                )
+                # No ANN index is rebuilt: dedup needs an exact nearest
+                # neighbour. See the note in api/schema.sql.
         print(f"  re-embedded {len(vectors)} rows at {settings.embedding_dim} dims")
 
         if args.merge_duplicates and merges:
@@ -210,7 +214,9 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--merge-duplicates", action="store_true")
-    parser.add_argument("--threshold", type=float, default=0.80)
+    parser.add_argument(
+        "--threshold", type=float, default=get_settings().dedup_threshold
+    )
     parser.add_argument("--show", type=int, default=12)
     args = parser.parse_args()
     if args.apply and args.dry_run:

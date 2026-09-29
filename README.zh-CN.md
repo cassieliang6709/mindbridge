@@ -174,7 +174,7 @@ approval_mode = "prompt"
 
 ```bash
 docker compose up -d db redis
-ollama list                         # 必须包含 nomic-embed-text
+ollama list                         # 必须包含 bge-m3
 codex mcp list                      # mindbridge 应显示 enabled
 ```
 
@@ -511,7 +511,7 @@ flowchart LR
         API["api/main.py<br/>FastAPI"]
     end
 
-    EMB["embeddings<br/>nomic-embed-text"]
+    EMB["embeddings<br/>bge-m3"]
     LORA["train/<br/>MLX LoRA"]
     CLI["Codex · Claude Code<br/>Cursor · VS Code"]
 
@@ -539,7 +539,7 @@ flowchart LR
 - **Ingest 是幂等的。** `source_key` 由 session、timestamp 和位置生成，不依赖 turn text，因此即使 reader 改动导致 turn 渲染方式变化，重新解析同一个文件也插入 0 行。
 - **只有 provider box 可能离开本机。** `claude-cli` 和 `mlx` 是本地路径；`openai` 与 `gemini` 会发送 excerpt，而且只有显式传入 `--send-to-provider` 才执行。
 - **T3 是 bitemporal。** `created_at` 表示何时学到，`valid_at` 表示何时不再有效。Superseded rows 只关闭，不删除。
-- **Embedding 不生成文字。** 本地 `nomic-embed-text`（768-dim）负责 0.80 write-time cosine dedup 与 retrieval score（`cosine × exp(-0.01 × days)`）；所有 prose 都来自 M2 box。
+- **Embedding 不生成文字。** 本地 `bge-m3`（1024-dim，多语言）负责 0.86 write-time cosine dedup 与 retrieval score（`cosine × exp(-0.01 × days)`）；所有 prose 都来自 M2 box。
 - **Pattern 留在 T3 外。** `propose_pattern` 写 candidate；只有显式 `resolve_pattern` decision 才能升级。
 - **LoRA box 是一个 adapter，不是第二套系统。** Qwen2.5-3B-Instruct-4bit 使用 198 fit rows 微调，另有 34 training-side validation 与 45 date-isolated holdout；它由本机 `mlx_lm.server` 提供服务，只有 schema failure 后才进入 retry。
 - **Cache 在 API 旁边，但刻意只开了一半。** bounded in-process LRU 与 Redis exact-key cache 已启用。semantic neighbour matching 已实现但关闭，因为无关短问题的 0.9992 高于真实 paraphrase 的 0.9064，没有安全 threshold。

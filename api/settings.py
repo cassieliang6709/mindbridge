@@ -102,10 +102,12 @@ class Settings(BaseSettings):
         le=1.0,
         description=(
             "Cosine similarity at or above which an incoming preference is "
-            "treated as the same fact and refreshed instead of inserted. 0.80 "
-            "was read off 170 real rows under nomic-embed-text: below it, "
-            "merges are mostly topical rather than duplicate. Retune when "
-            "changing embedding model — this number is model-specific."
+            "treated as the same fact and refreshed instead of inserted. "
+            "Model-specific: 0.86 under bge-m3 (129 real pairs read), 0.80 "
+            "under nomic-embed-text (170 rows). Below it, merges are mostly "
+            "topical rather than duplicate. Retune when changing embedding "
+            "model. The default stays 0.80 because the default provider is "
+            "not bge-m3; .env.example sets 0.86 alongside the model."
         ),
     )
     default_top_k: int = 5

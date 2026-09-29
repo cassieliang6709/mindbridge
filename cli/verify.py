@@ -53,7 +53,7 @@ MLX_MODELS = "http://127.0.0.1:8080/v1/models"
 API_HEALTH = "http://127.0.0.1:8000/healthz"
 DIARY_API = "http://127.0.0.1:3000/api/diary"
 
-EMBEDDER = "nomic-embed-text"
+EMBEDDER = "bge-m3"
 
 
 class VerifyError(RuntimeError):

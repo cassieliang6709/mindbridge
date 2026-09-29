@@ -115,11 +115,15 @@ CREATE INDEX IF NOT EXISTS memory_vectors_namespace_open_idx
     ON memory_vectors (namespace, category, created_at DESC)
     WHERE valid_at IS NULL;
 
--- Cosine ANN index. Rebuild (or raise lists) once the table is large; below a
--- few thousand rows Postgres will sequential-scan anyway, which is exact.
-CREATE INDEX IF NOT EXISTS memory_vectors_embedding_idx
-    ON memory_vectors USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+-- No ANN index on the embedding, on purpose. Write-time dedup asks for the
+-- single nearest open row in one namespace/category, and it must be exact: an
+-- approximate miss inserts a duplicate. The ivfflat index that used to sit here
+-- (lists=100, default probes=1) was chosen by the planner at 604 rows, searched
+-- about 1% of the table, and found the >=0.80 twin for 0 of 96 rows that had
+-- one. An exact scan of those rows takes about 1 ms. Retrieval orders by a
+-- decayed score, which no vector index can serve, so it never used the index.
+-- The DROP removes it from stores created before this change.
+DROP INDEX IF EXISTS memory_vectors_embedding_idx;
 
 -- Pattern candidates are inferences, not memories. They live outside T3 until
 -- the user confirms or edits the wording; only then does the service create a

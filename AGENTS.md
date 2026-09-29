@@ -5,9 +5,8 @@ get re-derived, re-argued, or silently reverted.
 
 ## The standard this project is held to
 
-MindBridge exists to survive an interview question. Its value is not that it
-works — it is that every claim on it can be reproduced on demand. That makes one
-rule non-negotiable:
+Every claim MindBridge makes must be reproducible on demand. That makes one rule
+non-negotiable:
 
 **Never show a number, a metric, or a generated artifact without also showing
 where it came from.**
@@ -35,8 +34,11 @@ In practice:
 | Teacher on the same seeded holdout | 82.2% | 45 | `evals/mlx_holdout_seed_3407.json` |
 | Same, earlier smaller sample | 81.4% | 86 | superseded — kept so older commits read correctly |
 | Teacher compliance with repair loop | 100% | 86 | same run |
-| T3 dedup threshold under nomic-embed-text | **0.80** | 170 rows read individually | `api/settings.py` |
+| T3 dedup threshold under bge-m3 | **0.86** | 129 pairs ≥0.80 read individually, 604 open rows | `evals/dedup_bands.py` |
+| T3 dedup threshold under nomic-embed-text | 0.80 | 170 rows read individually | superseded by bge-m3 |
+| Chinese-query recall@5 over English T3, nomic → bge-m3 | **0.10 → 0.925** | 40 queries, 604 open rows | private query set, 2026-09-27 |
 | Semantic query cache viability | **not viable** | 27 queries / 54 requests | `cacheCostSaving` stays null |
+| Chinese-query recall@5 over English memories (synthetic, public) | nomic-embed-text **0.02** → bge-m3 **0.90** | 50 targets in 150 memories | `evals/bilingual_retrieval.py` → `evals/bilingual_retrieval_results.json` |
 
 **84.7% (n=281) is the bar** stage two's fine-tuned model must clear, judged by the
 same rule: **first reply only, repairs excluded.** Changing that definition to
@@ -73,6 +75,15 @@ the turns an incremental run happened to parse. Building from the delta rewrote
 a 683-turn card as a 223-turn one. This is why `session_turns` persists
 `project`, `git_branch` and `tool_names`.
 
+**An ANN index made write-time dedup silently stop.** `memory_vectors` had an
+ivfflat index (lists=100). At pgvector's default `probes=1` the planner used it
+for `nearest_open` even at 604 rows, searched about 1% of the table, and for 0 of
+the 96 rows that had a same-namespace, same-category twin at >=0.80 did it return
+that twin. So 139 duplicate pairs sat open. `probes=10` finds 89, `probes=100`
+finds all 96, and an exact scan takes about 1 ms. The index is gone. Do not add
+an ANN index back without measuring dedup recall on real rows first; "Postgres
+will sequential-scan small tables anyway" was the assumption, and it was wrong.
+
 **Day cards and session cards share one table.** Every read states a scope
 (`/summaries?scope=day|session|all`, default `day`). Without it the diary's day
 list fills with hundreds of session rows.
@@ -100,11 +111,31 @@ duplicates 0.13–0.73 — "Use uv instead of pip" against "Python 项目优先�
 **0.251**, because two languages share no tokens. Under it, write-time dedup
 never fires: 121 preferences all sat at `access_count` 0.
 
-Use **ollama + nomic-embed-text (768 dims)**. It keeps the local-only promise,
-needs no key, and merged 103 of 411 preference writes on replay.
+Use **ollama + bge-m3 (1024 dims)**. It keeps the local-only promise and needs
+no key. It replaced nomic-embed-text (768 dims), which is an English model:
+over 40 queries against the 604 open T3 rows, a Chinese query found its target
+in the top 5 **10%** of the time under nomic (median rank 220, i.e. random) and
+**92.5%** under bge-m3. English stayed at 97.5–100%. 95% of T3 is English, so
+under nomic a Chinese question effectively could not reach memory.
 
-**The 0.80 threshold is model-specific and was read off 170 real rows, not
-picked.** nomic-embed-text puts *topically* related preferences at 0.62–0.75 —
+Switching did **not** improve dedup on the current rows: every pair bge-m3 puts
+at ≥0.86 nomic already put at ≥0.80. The known cross-language duplicate
+("Use uv instead of pip" / "Python 项目优先用 uv") scores 0.742 under bge-m3 and
+0.697 under nomic — still below threshold under both. The retrieval gain is the
+reason for the switch; do not claim a dedup gain.
+
+**The 0.86 threshold is model-specific and was read off 129 real pairs, not
+picked.** Every open-row pair bge-m3 scored ≥0.80 was read and marked duplicate
+or distinct. The highest distinct pair scored 0.856; above it all 39 are
+duplicates. Distinct pairs sit as high as 0.80–0.83, and one at 0.802 paired
+"redesign in a new isolated folder" with "redesign inside the existing repo" —
+opposite preferences. `evals/dedup_bands.py` recomputes the pairs; the labels
+stay local because they quote private preferences. Pairs were compared across
+categories, while dedup only compares within one namespace/category, so the
+line is conservative.
+
+The earlier **0.80 under nomic-embed-text** came from the same method over 170
+rows. nomic-embed-text puts *topically* related preferences at 0.62–0.75 —
 everything in T3 is "how Cassie likes to work", so the space is compressed. In
 that band merges are mostly wrong; one at 0.686 would have merged "validate with
 mock data first" into "no fake data anywhere", which are nearly opposite.

@@ -264,7 +264,7 @@ Codex session:
 
 ```bash
 docker compose up -d db redis
-ollama list                         # must include nomic-embed-text
+ollama list                         # must include bge-m3
 codex mcp list                      # mindbridge should be enabled
 ```
 
@@ -730,7 +730,7 @@ flowchart LR
         API["api/main.py<br/>FastAPI"]
     end
 
-    EMB["embeddings<br/>nomic-embed-text"]
+    EMB["embeddings<br/>bge-m3"]
     LORA["train/<br/>MLX LoRA"]
     CLI["Codex · Claude Code<br/>Cursor · VS Code"]
 
@@ -763,8 +763,8 @@ Reading the diagram:
   `--send-to-provider` is passed explicitly.
 - **T3 is bitemporal.** `created_at` is when it was learned, `valid_at` when it
   stopped being true. Superseded rows are closed, never deleted.
-- **Embeddings never generate.** `nomic-embed-text` (768-dim, local) does
-  write-time cosine dedup at 0.80 and retrieval scoring
+- **Embeddings never generate.** `bge-m3` (1024-dim, local, multilingual) does
+  write-time cosine dedup at 0.86 and retrieval scoring
   (`cosine x exp(-0.01 x days)`); every word of prose comes from the M2 box.
 - **Patterns stay outside T3.** `propose_pattern` writes a candidate; only an
   explicit `resolve_pattern` decision promotes it.
@@ -797,6 +797,18 @@ Open [http://localhost:3000](http://localhost:3000), or
 [/demo](http://localhost:3000/demo) for the diary.
 
 ## Validate
+
+Run the complete Python suite from the repository root, including the offline
+extraction-contract checks:
+
+```bash
+uv run --with-requirements requirements.txt python -m unittest discover -s tests
+```
+
+The Python tests use local fixtures and a mocked HTTP transport; they do not
+require Postgres, a model service, or API credentials.
+
+Run the web lint and production build separately:
 
 ```bash
 npm run lint && npm run build
@@ -848,3 +860,7 @@ the MCP Python SDK, Docker Compose.
 **Local model** — Qwen2.5-3B-Instruct-4bit, MLX LoRA, `mlx_lm.server`.
 **Roadmap, not shipped** — export to a portable CUDA/vLLM serving target if the
 local pilot ever needs to run away from Apple silicon.
+
+## License
+
+[Apache License 2.0](LICENSE).

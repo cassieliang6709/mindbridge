@@ -114,7 +114,7 @@ def run(client_name: str, root: Path) -> int:
         print(f"MindBridge registered as a {client.label} MCP server.")
 
     print("Start the local data layer: docker compose up -d db redis")
-    print("Ensure Ollama has the embedder: ollama pull nomic-embed-text")
+    print("Ensure Ollama has the embedder: ollama pull bge-m3")
     print(f"Then restart {client.name} or open a fresh session and run: /mcp")
     print("Check the whole loop at once with: mindbridge doctor")
     return 0
